@@ -1,0 +1,24 @@
+# Music files — provide your own via --folder
+songs/*
+!songs/.gitkeep
+
+# Generated library
+music/song_library.json
+
+# Generated playlists and cue sheets
+results/*
+!results/.gitkeep
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS metadata
+.DS_Store
+
+# Test cache
+.pytest_cache/
