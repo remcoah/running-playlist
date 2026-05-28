@@ -25,6 +25,11 @@ def _analyze_file(file_path: Path) -> dict:
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
     # atleast_1d handles librosa versions that return a scalar vs an array
     bpm = int(round(float(np.atleast_1d(tempo)[0])))
+    # Correct librosa half-time / double-time detection errors before storing
+    if bpm < 100:
+        bpm = round(bpm * 2)
+    elif bpm > 200:
+        bpm = round(bpm / 2)
 
     duration_secs = int(librosa.get_duration(y=y, sr=sr))
 

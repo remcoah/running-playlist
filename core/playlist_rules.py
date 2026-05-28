@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from config.settings import COOLDOWN_MAX_ENERGY, WARMUP_MAX_ENERGY
+from config.settings import COOLDOWN_MAX_ENERGY, REPEAT_ALLOWED_AFTER, WARMUP_MAX_ENERGY
 
 
 def filter_by_bpm(songs: list[dict], target_bpm: int, tolerance: int) -> list[dict]:
@@ -35,6 +35,22 @@ def exclude_recently_played(songs: list[dict], within_mins: int) -> list[dict]:
         if mins_since >= within_mins:
             result.append(song)
     return result
+
+
+def get_repeat_candidates(
+    candidates: list[dict],
+    used_paths: list[str],
+    target_bpm: int,
+    tolerance: int,
+) -> list[dict]:
+    """Return previously used tracks not in the last REPEAT_ALLOWED_AFTER slots, filtered by BPM.
+
+    Used as a last resort when no unused tracks match the slot BPM.
+    """
+    recently_used = set(used_paths[-REPEAT_ALLOWED_AFTER:])
+    all_used = set(used_paths)
+    eligible = [s for s in candidates if s["path"] in all_used and s["path"] not in recently_used]
+    return filter_by_bpm(eligible, target_bpm, tolerance)
 
 
 def apply_warmup_cooldown(

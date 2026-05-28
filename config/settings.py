@@ -38,3 +38,12 @@ DEFAULT_OUTPUT_PATH = OUTPUT_DIR / "playlist"
 # Logging
 LOG_PATH = BASE_DIR / "logs" / "app.log"
 LOG_LEVEL: str = "DEBUG"
+
+# Playback
+SLOT_DURATION_MINS: int = 4
+CROSSFADE_DURATION_SECS: int = 8
+DEFAULT_TRANSITION: str = "crossfade"
+DEFAULT_ENERGY_PROFILE: str = "steady"
+VOLUME_STEP: float = 0.05
+INITIAL_VOLUME: float = 0.8
+REPEAT_ALLOWED_AFTER: int = 5   # minimum slots between repeat plays of the same track

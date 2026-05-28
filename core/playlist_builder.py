@@ -1,51 +1,102 @@
 from __future__ import annotations
 
-import random
+import logging
 from datetime import datetime, timezone
 
-from config.settings import COOLDOWN_MINS, RECENTLY_PLAYED_WINDOW_MINS, WARMUP_MINS
-from core.run_context import RunContext
+logger = logging.getLogger("running_playlist")
+
+from config.settings import (
+    COOLDOWN_MINS,
+    DEFAULT_ENERGY_PROFILE,
+    RECENTLY_PLAYED_WINDOW_MINS,
+    SLOT_DURATION_MINS,
+    WARMUP_MINS,
+)
+from core.energy_profile import get_targets
 from core.playlist_rules import (
     apply_warmup_cooldown,
     exclude_recently_played,
     filter_by_bpm,
+    get_repeat_candidates,
 )
+from core.run_context import RunContext
 
 
-def build_playlist(context: RunContext, library: list[dict]) -> dict:
-    """Filter the library, fill the run duration with shuffled tracks, and return the ordered playlist dict."""
-    # Filter to songs that match the target BPM window
-    candidates = filter_by_bpm(library, context.target_bpm, context.bpm_tolerance)
+def _pick_song(
+    candidates: list[dict],
+    slot_bpm: int,
+    slot_energy: float,
+    tolerance: int,
+    used_paths: list[str],
+) -> dict:
+    """Pick the candidate that best matches the slot BPM and energy target.
 
-    # Drop songs played too recently to keep the playlist fresh
-    candidates = exclude_recently_played(candidates, RECENTLY_PLAYED_WINDOW_MINS)
+    Fallback order:
+      1. Unused tracks at strict BPM tolerance
+      2. Unused tracks at doubled BPM tolerance
+      3. Repeat candidates spaced >= REPEAT_ALLOWED_AFTER slots
+      4. Raise ValueError if nothing qualifies
+    """
+    used_set = set(used_paths)
+    unused = [s for s in candidates if s["path"] not in used_set]
 
-    # Shuffle for variety, then greedily fill the target run duration.
-    # If the pool is exhausted before the target is reached, reshuffle and
-    # repeat — each pass uses a different order to avoid back-to-back repeats.
-    pool = candidates[:]
-    random.shuffle(pool)
+    # Phase 1: unused at strict tolerance
+    eligible = filter_by_bpm(unused, slot_bpm, tolerance)
 
-    target_secs = int(context.duration_mins * 60)
+    # Phase 2: unused at doubled tolerance
+    if not eligible:
+        logger.warning(
+            "No unused tracks for BPM %d ± %d. Widening search to ± %d.",
+            slot_bpm, tolerance, tolerance * 2,
+        )
+        eligible = filter_by_bpm(unused, slot_bpm, tolerance * 2)
+
+    # Phase 3: allow repeats spaced by REPEAT_ALLOWED_AFTER slots
+    if not eligible:
+        eligible = get_repeat_candidates(candidates, used_paths, slot_bpm, tolerance * 2)
+
+    if not eligible:
+        raise ValueError(
+            f"Library has no tracks near {slot_bpm} BPM even with "
+            f"doubled tolerance. Add more songs or adjust your pace."
+        )
+
+    last = used_paths[-1] if used_paths else None
+    pool = [s for s in eligible if s["path"] != last] or eligible
+
+    return min(pool, key=lambda s: abs(s["energy"] - slot_energy))
+
+
+def build_playlist(
+    context: RunContext,
+    library: list[dict],
+    profile: str = DEFAULT_ENERGY_PROFILE,
+) -> dict:
+    """Build a segment-aware playlist, picking one song per time slot to match the profile's BPM and energy targets."""
+    candidates = exclude_recently_played(library, RECENTLY_PLAYED_WINDOW_MINS)
+
+    total_slots = max(1, round(context.duration_mins / SLOT_DURATION_MINS))
+    used_paths: list[str] = []
     queue: list[dict] = []
-    total = 0
-    while total < target_secs and pool:
-        for song in pool:
-            if total >= target_secs:
-                break
-            queue.append(song)
-            total += song["duration_secs"]
-        random.shuffle(pool)
-        # Ensure the first song of a repeat pass doesn't immediately follow itself
-        if len(pool) > 1 and queue and pool[0]["path"] == queue[-1]["path"]:
-            pool[0], pool[1] = pool[1], pool[0]
 
-    # Reorder queue into warmup → main run → cooldown phases
+    for slot_idx in range(total_slots):
+        position = slot_idx / max(total_slots - 1, 1)
+        targets = get_targets(profile, position)
+        slot_bpm = context.target_bpm + targets["bpm_offset"]
+
+        song = _pick_song(
+            candidates, slot_bpm, targets["energy_target"],
+            context.bpm_tolerance, used_paths,
+        )
+        queue.append(song)
+        used_paths.append(song["path"])
+
     queue, warmup_count, cooldown_count = apply_warmup_cooldown(queue, WARMUP_MINS, COOLDOWN_MINS)
 
     return {
         "tracks": queue,
         "target_bpm": context.target_bpm,
+        "profile": profile,
         "total_duration_secs": sum(s["duration_secs"] for s in queue),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "warmup_count": warmup_count,
