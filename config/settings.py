@@ -4,7 +4,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # BPM
-DEFAULT_BPM_TOLERANCE: int = 10
+DEFAULT_BPM_TOLERANCE: int = 15
 BPM_MIN: int = 100   # lower bound for any realistic running cadence
 BPM_MAX: int = 240   # upper bound for any realistic running cadence
 
@@ -47,3 +47,4 @@ DEFAULT_ENERGY_PROFILE: str = "steady"
 VOLUME_STEP: float = 0.05
 INITIAL_VOLUME: float = 0.8
 REPEAT_ALLOWED_AFTER: int = 5   # minimum slots between repeat plays of the same track
+REWIND_THRESHOLD_SECS: int = 3

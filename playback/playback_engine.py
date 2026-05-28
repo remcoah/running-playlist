@@ -48,7 +48,10 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
     Blocks until state.is_complete is True. Initialises and tears down
     pygame.mixer internally.
     """
-    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    try:
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    except pygame.error as e:
+        raise RuntimeError(f"Audio device unavailable: {e}") from e
 
     ch_a = pygame.mixer.Channel(0)  # active channel
     ch_b = pygame.mixer.Channel(1)  # standby / crossfade incoming channel
@@ -86,6 +89,24 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                             ch_b.set_volume(state.volume)
                 except queue.Empty:
                     break
+
+            # Rewind: stop and reload the appropriate track, then continue.
+            if state.pending_action is not None:
+                ch_a.stop()
+                ch_b.stop()
+                crossfade_start_time = None
+                if not is_complete(state):
+                    while not is_complete(state):
+                        track = current_track(state)
+                        if _load_and_play(ch_a, track, state.volume):
+                            track_start_time = time.monotonic()
+                            break
+                        logger.error("Skipping unloadable track: %s", track["path"])
+                        advance_track(state)
+                state.pending_action = None
+                state.elapsed_mins += _TICK_SECS / 60
+                time.sleep(_TICK_SECS)
+                continue
 
             # SKIP detection: advance_track was called inside apply_command —
             # stop the current track immediately and load the new one.
@@ -165,6 +186,7 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
 
             # ── 4. Update elapsed time ────────────────────────────────────────
             state.elapsed_mins += _TICK_SECS / 60
+            state.track_elapsed_secs += _TICK_SECS
 
             # ── 5. Sleep ──────────────────────────────────────────────────────
             time.sleep(_TICK_SECS)

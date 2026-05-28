@@ -24,8 +24,8 @@ def _run_with_keys(*keys: str) -> q.Queue:
 
 # ── tests ─────────────────────────────────────────────────────────────────────
 
-def test_n_keypress_queues_skip():
-    assert _run_with_keys("n").get_nowait() == "SKIP"
+def test_right_arrow_queues_skip():
+    assert _run_with_keys("\x1b[C").get_nowait() == "SKIP"
 
 
 def test_q_keypress_queues_quit():
@@ -52,6 +52,10 @@ def test_down_arrow_queues_vol_down():
 
 def test_unknown_key_adds_nothing_to_queue():
     assert _run_with_keys("x").empty()
+
+
+def test_left_arrow_queues_rewind():
+    assert _run_with_keys("\x1b[D").get_nowait() == "REWIND"
 
 
 def test_start_listening_returns_daemon_thread():

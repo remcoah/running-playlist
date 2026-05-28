@@ -1,5 +1,7 @@
 import argparse
+import queue
 import sys
+import time
 from pathlib import Path
 
 import config.settings as settings
@@ -47,11 +49,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Delete song_library.json and rebuild from scratch before generating playlist",
     )
+    parser.add_argument(
+        "--no-playback",
+        action="store_true",
+        help="Generate and save the playlist without playing it (Phase 1 behaviour)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    """Orchestrate the full pipeline: parse args, build run context, scan library, generate playlist, and write output."""
+    """Orchestrate the full pipeline: parse args, build run context, scan library, generate playlist, and optionally play it."""
     configure_logging()
     args = _parse_args()
 
@@ -98,11 +105,40 @@ def main() -> None:
 
     print(f"Library: {len(library)} tracks scanned")
 
-    # Step 4: build the playlist
+    # Step 4: collect playback preferences before building the playlist
+    transition_style = settings.DEFAULT_TRANSITION
+    energy_profile = settings.DEFAULT_ENERGY_PROFILE
+
+    if not args.no_playback:
+        choice = input("Press ENTER to start your run, Q to quit: ").strip()
+        if choice.lower() == "q":
+            print("Run cancelled.")
+            return
+
+        choice = input(
+            "Transition style: [C]rossfade or [H]ard cut? (default: crossfade): "
+        ).strip()
+        if choice.lower() == "h":
+            transition_style = "hardcut"
+        elif choice.lower() not in ("", "c"):
+            print("Defaulting to crossfade.")
+
+        choice = input(
+            "Energy profile: [S]teady, [B]uild, [P]yramid? (default: steady): "
+        ).strip()
+        if choice.lower() == "b":
+            energy_profile = "build"
+        elif choice.lower() == "p":
+            energy_profile = "pyramid"
+        elif choice.lower() not in ("", "s"):
+            print("Defaulting to steady.")
+
+    # Step 5: build the playlist (uses energy_profile from prompt or default)
     playlist = safe_call(
         build_playlist,
         context,
         library,
+        energy_profile,
         fallback=None,
         label="build_playlist",
     )
@@ -114,25 +150,72 @@ def main() -> None:
     total_mins = playlist["total_duration_secs"] // 60
     print(f"Playlist: {track_count} tracks, {total_mins} min total")
 
-    # Step 5: write output file
+    # Step 6: print playlist summary
+    print(format_summary(playlist))
+
+    # ── Phase 1 (--no-playback) path: write files and exit ───────────────────
+    if args.no_playback:
+        base_output = Path(args.output)
+        output_path = base_output.parent / (base_output.name + f".{args.format}")
+        if args.format == "m3u":
+            safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
+        else:
+            safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
+
+        played_paths = [track["path"] for track in playlist["tracks"]]
+        safe_call(mark_played, played_paths, fallback=None, label="mark_played")
+
+        cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
+        if cues:
+            cue_path = base_output.parent / (base_output.name + ".cue.json")
+            safe_call(write_cue_file, cues, cue_path, fallback=None, label="write_cue_file")
+
+        print(f"Saved → {output_path}")
+        return
+
+    # ── Phase 2 (playback) path ───────────────────────────────────────────────
+    # Deferred imports so --no-playback works without pygame installed
+    from core.session_controller import create_session, get_summary
+    from playback.input_handler import start_listening
+    from playback.playback_engine import start
+
+    print("\nControls during your run:")
+    print("  SPACE    pause / resume")
+    print("  →        skip to next track")
+    print("  ←        rewind / previous track")
+    print("  ↑ / ↓    volume up / down")
+    print("  Q        quit")
+    print("Starting in 3... 2... 1...")
+    time.sleep(3)
+
+    state = create_session(playlist, transition_style)
+    cmd_queue = queue.Queue()
+    start_listening(cmd_queue)
+
+    try:
+        start(state, cmd_queue)
+    except RuntimeError as e:
+        print(f"Error: {e}")
+        return
+    except KeyboardInterrupt:
+        print("Run interrupted.")
+        summary = get_summary(state)
+        if summary["played_paths"]:
+            safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
+        return
+
+    summary = get_summary(state)
+    print("Run complete!")
+    print(f"  Tracks played: {summary['tracks_played']}")
+    print(f"  Time elapsed: {summary['elapsed_mins']:.1f} min")
+
     base_output = Path(args.output)
     output_path = base_output.parent / (base_output.name + f".{args.format}")
     if args.format == "m3u":
         safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
     else:
         safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
-
-    played_paths = [track["path"] for track in playlist["tracks"]]
-    safe_call(mark_played, played_paths, fallback=None, label="mark_played")
-
-    print(format_summary(playlist))
-
-    # Step 6: write cue sheet alongside the playlist
-    cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
-    if cues:
-        cue_path = base_output.parent / (base_output.name + ".cue.json")
-        safe_call(write_cue_file, cues, cue_path, fallback=None, label="write_cue_file")
-
+    safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
     print(f"Saved → {output_path}")
 
 

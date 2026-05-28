@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-logger = logging.getLogger("running_playlist")
-
 from config.settings import (
     COOLDOWN_MINS,
     DEFAULT_ENERGY_PROFILE,
@@ -20,6 +18,8 @@ from core.playlist_rules import (
     get_repeat_candidates,
 )
 from core.run_context import RunContext
+
+logger = logging.getLogger("running_playlist")
 
 
 def _pick_song(
@@ -40,10 +40,8 @@ def _pick_song(
     used_set = set(used_paths)
     unused = [s for s in candidates if s["path"] not in used_set]
 
-    # Phase 1: unused at strict tolerance
     eligible = filter_by_bpm(unused, slot_bpm, tolerance)
 
-    # Phase 2: unused at doubled tolerance
     if not eligible:
         logger.warning(
             "No unused tracks for BPM %d ± %d. Widening search to ± %d.",
@@ -51,7 +49,6 @@ def _pick_song(
         )
         eligible = filter_by_bpm(unused, slot_bpm, tolerance * 2)
 
-    # Phase 3: allow repeats spaced by REPEAT_ALLOWED_AFTER slots
     if not eligible:
         eligible = get_repeat_candidates(candidates, used_paths, slot_bpm, tolerance * 2)
 
@@ -77,7 +74,7 @@ def build_playlist(
 
     total_slots = max(1, round(context.duration_mins / SLOT_DURATION_MINS))
     used_paths: list[str] = []
-    queue: list[dict] = []
+    tracks: list[dict] = []
 
     for slot_idx in range(total_slots):
         position = slot_idx / max(total_slots - 1, 1)
@@ -88,16 +85,16 @@ def build_playlist(
             candidates, slot_bpm, targets["energy_target"],
             context.bpm_tolerance, used_paths,
         )
-        queue.append(song)
+        tracks.append(song)
         used_paths.append(song["path"])
 
-    queue, warmup_count, cooldown_count = apply_warmup_cooldown(queue, WARMUP_MINS, COOLDOWN_MINS)
+    tracks, warmup_count, cooldown_count = apply_warmup_cooldown(tracks, WARMUP_MINS, COOLDOWN_MINS)
 
     return {
-        "tracks": queue,
+        "tracks": tracks,
         "target_bpm": context.target_bpm,
         "profile": profile,
-        "total_duration_secs": sum(s["duration_secs"] for s in queue),
+        "total_duration_secs": sum(s["duration_secs"] for s in tracks),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "warmup_count": warmup_count,
         "cooldown_count": cooldown_count,

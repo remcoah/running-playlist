@@ -6,7 +6,9 @@ from core.session_controller import (
     apply_command,
     create_session,
     current_track,
+    get_summary,
     is_complete,
+    rewind_track,
 )
 
 
@@ -122,6 +124,60 @@ class TestApplyCommand:
         apply_command(state, "QUIT")
         assert state.is_complete is True
 
+class TestRewindTrack:
+    def test_elapsed_over_threshold_returns_restart(self):
+        state = create_session(_make_queue_dict(3), "crossfade")
+        state.current_index = 1
+        state.track_elapsed_secs = 4.0
+        _, action = rewind_track(state)
+        assert action == "RESTART"
+        assert state.current_index == 1
+        assert state.track_elapsed_secs == 0.0
+
+    def test_elapsed_within_threshold_with_prev_track_returns_load_prev(self):
+        state = create_session(_make_queue_dict(3), "crossfade")
+        state.current_index = 2
+        state.track_elapsed_secs = 2.0
+        _, action = rewind_track(state)
+        assert action == "LOAD_PREV"
+        assert state.current_index == 1
+        assert state.track_elapsed_secs == 0.0
+
+    def test_elapsed_within_threshold_at_first_track_returns_restart(self):
+        state = create_session(_make_queue_dict(3), "crossfade")
+        state.current_index = 0
+        state.track_elapsed_secs = 1.0
+        _, action = rewind_track(state)
+        assert action == "RESTART"
+        assert state.current_index == 0
+        assert state.track_elapsed_secs == 0.0
+
+    def test_apply_command_rewind_sets_pending_action(self):
+        state = create_session(_make_queue_dict(3), "crossfade")
+        state.current_index = 1
+        state.track_elapsed_secs = 5.0
+        apply_command(state, "REWIND")
+        assert state.pending_action == "RESTART"
+
+
+class TestGetSummary:
+    def test_mid_run_state_returns_correct_summary(self):
+        qd = _make_queue_dict(3)
+        state = create_session(qd, "crossfade")
+        state.current_index = 2
+        state.elapsed_mins = 8.5
+
+        summary = get_summary(state)
+
+        assert summary["tracks_played"] == 3
+        assert summary["elapsed_mins"] == 8.5
+        assert summary["played_paths"] == [
+            "/songs/track_0.mp3",
+            "/songs/track_1.mp3",
+        ]
+
+
+class TestApplyCommand:
     def test_unknown_command_leaves_state_unchanged(self):
         state = create_session(_make_queue_dict(), "crossfade")
         before_index = state.current_index
