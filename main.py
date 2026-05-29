@@ -192,6 +192,7 @@ def main() -> None:
     from playback.input_handler import restore_terminal, start_listening
     from playback.playback_engine import start
 
+    print("Preparing your playlist...")
     print("\nControls during your run:")
     print("  SPACE    pause / resume")
     print("  →        skip to next track")
