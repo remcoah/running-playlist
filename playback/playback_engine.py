@@ -18,6 +18,7 @@ from core.session_controller import (
 logger = logging.getLogger("running_playlist")
 
 _TICK_SECS = 0.1
+_PRELOAD_AFTER_SECS = 5.0
 
 
 def _load_sound(path: str):
@@ -73,6 +74,7 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
     track_start_time = time.monotonic()
     crossfade_start_time: float | None = None
     was_paused = False
+    next_sound: pygame.mixer.Sound | None = None
 
     try:
         while not is_complete(state):
@@ -95,6 +97,7 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                 ch_a.stop()
                 ch_b.stop()
                 crossfade_start_time = None
+                next_sound = None
                 if not is_complete(state):
                     while not is_complete(state):
                         track = current_track(state)
@@ -114,6 +117,7 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                 ch_a.stop()
                 ch_b.stop()
                 crossfade_start_time = None
+                next_sound = None
                 if not is_complete(state):
                     while not is_complete(state):
                         track = current_track(state)
@@ -153,10 +157,12 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                     # New track has been audible since crossfade_start_time
                     track_start_time = crossfade_start_time
                     crossfade_start_time = None
+                    next_sound = None
 
             elif not ch_a.get_busy():
                 # Track finished naturally (hardcut end or track ran to completion)
                 advance_track(state)
+                next_sound = None
                 if not is_complete(state):
                     while not is_complete(state):
                         track = current_track(state)
@@ -171,12 +177,21 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                 track = current_track(state)
                 time_remaining = track["duration_secs"] - elapsed
                 next_idx = state.current_index + 1
+
+                # Pre-load the next track 5 seconds into the current one so it
+                # is already in memory when the crossfade trigger point arrives.
+                if (
+                    next_sound is None
+                    and elapsed >= _PRELOAD_AFTER_SECS
+                    and next_idx < len(state.queue_dict["tracks"])
+                ):
+                    next_sound = _load_sound(state.queue_dict["tracks"][next_idx]["path"])
+
                 if (
                     time_remaining <= CROSSFADE_DURATION_SECS
                     and next_idx < len(state.queue_dict["tracks"])
                 ):
-                    next_track = state.queue_dict["tracks"][next_idx]
-                    sound = _load_sound(next_track["path"])
+                    sound = next_sound or _load_sound(state.queue_dict["tracks"][next_idx]["path"])
                     if sound is not None:
                         fade_ms = int(CROSSFADE_DURATION_SECS * 1000)
                         ch_b.set_volume(state.volume)

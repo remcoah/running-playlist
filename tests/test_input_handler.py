@@ -2,7 +2,7 @@ import queue as q
 import threading
 from unittest.mock import patch
 
-from playback.input_handler import _listen_loop, start_listening
+from playback.input_handler import _listen_loop, restore_terminal, start_listening
 
 
 # ── helper ───────────────────────────────────────────────────────────────────
@@ -63,3 +63,9 @@ def test_start_listening_returns_daemon_thread():
         thread = start_listening(q.Queue())
     assert isinstance(thread, threading.Thread)
     assert thread.daemon is True
+
+
+def test_restore_terminal_does_not_raise_after_start_listening():
+    with patch("playback.input_handler._listen_loop"):
+        start_listening(q.Queue())
+    restore_terminal()

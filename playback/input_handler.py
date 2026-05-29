@@ -9,6 +9,25 @@ import tty
 
 logger = logging.getLogger("running_playlist")
 
+_original_terminal_settings = None
+
+
+def restore_terminal() -> None:
+    """Restore the terminal to the settings captured at start_listening() time.
+
+    Safe to call from any thread, any number of times, even if the terminal
+    is already restored or stdin is closed.
+    """
+    if _original_terminal_settings is not None:
+        try:
+            termios.tcsetattr(
+                sys.stdin.fileno(),
+                termios.TCSADRAIN,
+                _original_terminal_settings,
+            )
+        except Exception:
+            pass
+
 
 def _get_keypress() -> str:
     """Read one raw keypress from stdin, including multi-byte escape sequences for arrow keys."""
@@ -68,6 +87,12 @@ def _listen_loop(command_queue: queue.Queue) -> None:
 
 def start_listening(command_queue: queue.Queue) -> threading.Thread:
     """Start a daemon thread running _listen_loop and return it."""
+    global _original_terminal_settings
+    try:
+        fd = sys.stdin.fileno()
+        _original_terminal_settings = termios.tcgetattr(fd)
+    except Exception:
+        pass
     thread = threading.Thread(target=_listen_loop, args=(command_queue,), daemon=True)
     thread.start()
     return thread

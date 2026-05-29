@@ -176,7 +176,7 @@ def main() -> None:
     # ── Phase 2 (playback) path ───────────────────────────────────────────────
     # Deferred imports so --no-playback works without pygame installed
     from core.session_controller import create_session, get_summary
-    from playback.input_handler import start_listening
+    from playback.input_handler import restore_terminal, start_listening
     from playback.playback_engine import start
 
     print("\nControls during your run:")
@@ -195,15 +195,18 @@ def main() -> None:
     try:
         start(state, cmd_queue)
     except RuntimeError as e:
+        restore_terminal()
         print(f"Error: {e}")
         return
     except KeyboardInterrupt:
+        restore_terminal()
         print("Run interrupted.")
         summary = get_summary(state)
         if summary["played_paths"]:
             safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
         return
 
+    restore_terminal()
     summary = get_summary(state)
     print("Run complete!")
     print(f"  Tracks played: {summary['tracks_played']}")
