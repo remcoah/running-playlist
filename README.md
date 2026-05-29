@@ -58,6 +58,9 @@ You will be prompted for:
 | `--output` | `results/playlist` | Output file path (without extension) |
 | `--rescan` | off | Delete cached library and re-analyse all files from scratch |
 | `--no-playback` | off | Generate and save the playlist without playing audio |
+| `--ignore-recent` | off | Includes recently played songs (useful for testing)|
+| `--clear-history` | off | Resets last played for all songs in the library (useful for testing or starting fresh)|
+
 
 ## Examples
 

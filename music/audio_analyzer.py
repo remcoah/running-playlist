@@ -103,6 +103,19 @@ def get_library() -> list[dict]:
     return _normalise_energy(songs) if songs else songs
 
 
+def clear_play_history() -> None:
+    """Set last_played to null for every track in song_library.json."""
+    songs = _load_raw()
+    if not songs:
+        logger.info("clear_play_history: library is empty or not yet scanned")
+        return
+    for song in songs:
+        song["last_played"] = None
+    with open(SONG_LIBRARY_PATH, "w") as f:
+        json.dump(songs, f, indent=2)
+    logger.info("clear_play_history: cleared last_played for %d tracks", len(songs))
+
+
 def mark_played(paths: list[str]) -> None:
     """Set last_played to now for each path in the list, then write the update to song_library.json."""
     songs = _load_raw()

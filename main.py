@@ -8,7 +8,7 @@ import config.settings as settings
 from config.user_profile import load_profile
 from core.error_handler import configure_logging, safe_call
 from core.run_calculator import build_run_context
-from music.audio_analyzer import get_library, mark_played, scan_folder
+from music.audio_analyzer import clear_play_history, get_library, mark_played, scan_folder
 from core.playlist_builder import build_playlist
 from output.playlist_output import format_summary, write_json, write_m3u
 from output.cue_library import build_cues, write_cue_file
@@ -54,6 +54,16 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Generate and save the playlist without playing it (Phase 1 behaviour)",
     )
+    parser.add_argument(
+        "--ignore-recent",
+        action="store_true",
+        help="Skip the recently-played filter for this run",
+    )
+    parser.add_argument(
+        "--clear-history",
+        action="store_true",
+        help="Reset last_played to null for all songs before generating the playlist",
+    )
     return parser.parse_args()
 
 
@@ -84,6 +94,11 @@ def main() -> None:
 
     print(f"Run: {args.distance} km at {args.pace} min/km → "
           f"{context.duration_mins:.1f} min, target {context.target_bpm} BPM")
+
+    # Step 3: optionally clear play history before scanning
+    if args.clear_history:
+        clear_play_history()
+        print("Play history cleared.")
 
     # Step 3: scan music folder — fatal if the folder is missing or empty
     try:
@@ -139,6 +154,7 @@ def main() -> None:
         context,
         library,
         energy_profile,
+        args.ignore_recent,
         fallback=None,
         label="build_playlist",
     )
@@ -161,9 +177,6 @@ def main() -> None:
             safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
         else:
             safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
-
-        played_paths = [track["path"] for track in playlist["tracks"]]
-        safe_call(mark_played, played_paths, fallback=None, label="mark_played")
 
         cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
         if cues:

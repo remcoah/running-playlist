@@ -68,9 +68,10 @@ def build_playlist(
     context: RunContext,
     library: list[dict],
     profile: str = DEFAULT_ENERGY_PROFILE,
+    ignore_recent: bool = False,
 ) -> dict:
     """Build a segment-aware playlist, picking one song per time slot to match the profile's BPM and energy targets."""
-    candidates = exclude_recently_played(library, RECENTLY_PLAYED_WINDOW_MINS)
+    candidates = library if ignore_recent else exclude_recently_played(library, RECENTLY_PLAYED_WINDOW_MINS)
 
     total_slots = max(1, round(context.duration_mins / SLOT_DURATION_MINS))
     used_paths: list[str] = []
