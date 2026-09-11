@@ -100,7 +100,7 @@ def main() -> None:
         clear_play_history()
         print("Play history cleared.")
 
-    # Step 3: scan music folder — fatal if the folder is missing or empty
+    # Step 4: scan music folder — fatal if the folder is missing or empty
     try:
         scan_folder(args.folder)
     except FileNotFoundError:
@@ -120,7 +120,7 @@ def main() -> None:
 
     print(f"Library: {len(library)} tracks scanned")
 
-    # Step 4: collect playback preferences before building the playlist
+    # Step 5: collect playback preferences before building the playlist
     transition_style = settings.DEFAULT_TRANSITION
     energy_profile = settings.DEFAULT_ENERGY_PROFILE
 
@@ -148,7 +148,7 @@ def main() -> None:
         elif choice.lower() not in ("", "s"):
             print("Defaulting to steady.")
 
-    # Step 5: build the playlist (uses energy_profile from prompt or default)
+    # Step 6: build the playlist (uses energy_profile from prompt or default)
     playlist = safe_call(
         build_playlist,
         context,
@@ -166,7 +166,7 @@ def main() -> None:
     total_mins = playlist["total_duration_secs"] // 60
     print(f"Playlist: {track_count} tracks, {total_mins} min total")
 
-    # Step 6: print playlist summary
+    # Step 7: print playlist summary
     print(format_summary(playlist))
 
     # ── Phase 1 (--no-playback) path: write files and exit ───────────────────
