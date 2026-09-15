@@ -15,6 +15,9 @@ A CLI tool that builds a running playlist matched to your pace. Given a distance
 - Python 3.9+
 - [Anaconda](https://www.anaconda.com/) or `pip`
 - [pygame](https://www.pygame.org/) (installed via requirements.txt) — required for audio playback. Not needed for `--no-playback` mode.
+- [ffmpeg](https://ffmpeg.org/) — required for time stretching (Phase 3). 
+  Install via `brew install ffmpeg` on Mac. The app will show a clear 
+  error and fall back to unstretched playback if ffmpeg is not found.
 
 ## Installation
 
