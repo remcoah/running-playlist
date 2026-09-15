@@ -4,7 +4,12 @@ import queue as q
 import threading
 from unittest.mock import patch
 
-from playback.input_handler import _listen_loop, restore_terminal, start_listening
+from playback.input_handler import (
+    _MAX_CONSECUTIVE_READ_FAILURES,
+    _listen_loop,
+    restore_terminal,
+    start_listening,
+)
 
 # ── helper ───────────────────────────────────────────────────────────────────
 
@@ -72,3 +77,41 @@ def test_restore_terminal_does_not_raise_after_start_listening():
     with patch("playback.input_handler._listen_loop"):
         start_listening(q.Queue())
     restore_terminal()
+
+
+def test_listener_gives_up_after_max_consecutive_read_failures():
+    cmd_queue = q.Queue()
+    with patch(
+        "playback.input_handler._get_keypress", side_effect=OSError("not a tty")
+    ) as mock_get:
+        with patch("playback.input_handler.time.sleep") as mock_sleep:
+            _listen_loop(cmd_queue)  # must return cleanly, not raise, not hang
+
+    assert mock_get.call_count == _MAX_CONSECUTIVE_READ_FAILURES
+    # The failure that hits the threshold gives up immediately, without sleeping first
+    assert mock_sleep.call_count == _MAX_CONSECUTIVE_READ_FAILURES - 1
+
+
+def test_read_failure_counter_resets_after_a_successful_read():
+    cmd_queue = q.Queue()
+    # Two groups of failures, each individually under the give-up threshold,
+    # separated by one successful read. If the counter didn't reset on
+    # success, the combined total would cross the threshold partway through
+    # the second group and the loop would give up before ever reaching the
+    # trailing KeyboardInterrupt used here to stop it.
+    below_threshold = _MAX_CONSECUTIVE_READ_FAILURES - 1
+    side_effect = (
+        [OSError("fail")] * below_threshold
+        + ["q"]
+        + [OSError("fail")] * below_threshold
+        + [KeyboardInterrupt]
+    )
+    with patch("playback.input_handler._get_keypress", side_effect=side_effect):
+        with patch("playback.input_handler.time.sleep") as mock_sleep:
+            try:
+                _listen_loop(cmd_queue)
+            except KeyboardInterrupt:
+                pass
+
+    assert mock_sleep.call_count == below_threshold * 2
+    assert cmd_queue.get_nowait() == "QUIT"

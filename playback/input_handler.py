@@ -7,11 +7,18 @@ import queue
 import sys
 import termios
 import threading
+import time
 import tty
 
 logger = logging.getLogger("running_playlist")
 
 _original_terminal_settings = None
+
+# If stdin isn't a real TTY (e.g. running under a non-interactive process),
+# every read fails immediately and repeatedly — without these, the loop
+# spins as fast as the CPU allows and floods the log.
+_MAX_CONSECUTIVE_READ_FAILURES = 10
+_READ_FAILURE_BACKOFF_SECS = 0.5
 
 
 def restore_terminal() -> None:
@@ -53,10 +60,12 @@ def _listen_loop(command_queue: queue.Queue) -> None:
         old_settings = termios.tcgetattr(fd)
     except Exception:
         pass
+    consecutive_failures = 0
     try:
         while True:
             try:
                 ch = _get_keypress()
+                consecutive_failures = 0
                 if ch == " ":
                     if _is_paused:
                         command_queue.put("RESUME")
@@ -76,7 +85,17 @@ def _listen_loop(command_queue: queue.Queue) -> None:
                     command_queue.put("QUIT")
                 # Unknown keys are silently ignored
             except Exception as exc:
+                consecutive_failures += 1
                 logger.error("Input read error: %s", exc)
+                if consecutive_failures >= _MAX_CONSECUTIVE_READ_FAILURES:
+                    logger.error(
+                        "Input listener giving up after %d consecutive read "
+                        "failures — stdin may not be a real terminal. "
+                        "Keyboard controls are disabled for this run.",
+                        consecutive_failures,
+                    )
+                    return
+                time.sleep(_READ_FAILURE_BACKOFF_SECS)
     finally:
         if old_settings is not None:
             try:
