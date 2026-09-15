@@ -209,15 +209,20 @@ def main() -> None:
                 effective_target = slot_target_bpm
 
             try:
-                playback_path = audio_processor.stretch_track(
+                playback_path, actual_duration_secs = audio_processor.stretch_track(
                     source_path=track["path"],
                     original_bpm=track["bpm"],
                     target_bpm=effective_target,
                     temp_dir=temp_dir,
+                    original_duration_secs=track["duration_secs"],
                 )
                 track["playback_path"] = str(playback_path)
                 track["original_bpm"] = track["bpm"]
                 track["target_bpm"] = effective_target
+                # Whatever file playback_path actually points to — stretched or
+                # not — the crossfade trigger needs its real duration, not the
+                # library's pre-stretch scan value.
+                track["duration_secs"] = actual_duration_secs
             except audio_processor.AudioProcessingError as e:
                 print(f"  Warning: could not stretch {name} — playing "
                       f"original at {track['bpm']} BPM")

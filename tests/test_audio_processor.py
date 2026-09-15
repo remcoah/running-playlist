@@ -23,7 +23,10 @@ def mock_ffmpeg_convert(monkeypatch):
 
 @pytest.fixture
 def mock_librosa_load(monkeypatch):
-    mock = MagicMock(return_value=(np.zeros(1000), 22050))
+    # 5 seconds of mono silence at 22050 Hz -- a size chosen so tests can
+    # verify the measured duration precisely (1000 samples is too tiny to
+    # round to anything meaningful in seconds).
+    mock = MagicMock(return_value=(np.zeros(22050 * 5), 22050))
     monkeypatch.setattr(audio_processor.librosa, "load", mock)
     return mock
 
@@ -49,11 +52,12 @@ def mock_sf_write(monkeypatch):
 def test_ratio_within_bounds_triggers_stretch_and_write(
     tmp_path, mock_ffmpeg_convert, mock_librosa_load, mock_time_stretch, mock_sf_write
 ):
-    result = audio_processor.stretch_track(
+    path, duration_secs = audio_processor.stretch_track(
         source_path="/music/song.mp3",
         original_bpm=140,
         target_bpm=165,
         temp_dir=tmp_path,
+        original_duration_secs=240,
     )
 
     expected_temp_wav = tmp_path / "song_source.wav"
@@ -61,7 +65,12 @@ def test_ratio_within_bounds_triggers_stretch_and_write(
     mock_librosa_load.assert_called_once_with(str(expected_temp_wav), sr=None, mono=False)
     mock_time_stretch.assert_called_once()
     mock_sf_write.assert_called_once()
-    assert result == tmp_path / "song_165bpm.wav"
+    assert path == tmp_path / "song_165bpm.wav"
+    # mock_time_stretch is an identity passthrough, so the "stretched" audio
+    # is still the fixture's 5s-at-22050Hz array -- duration must be measured
+    # from that (5), not from original_duration_secs (240) or a ratio-derived
+    # guess.
+    assert duration_secs == 5
 
 
 def test_ffmpeg_conversion_runs_before_librosa_load_and_never_sees_source_path(
@@ -89,6 +98,7 @@ def test_ffmpeg_conversion_runs_before_librosa_load_and_never_sees_source_path(
         original_bpm=140,
         target_bpm=165,
         temp_dir=tmp_path,
+        original_duration_secs=240,
     )
 
     assert call_order[0] == "ffmpeg"
@@ -109,9 +119,11 @@ def test_ratio_below_min_returns_original_and_skips_load(tmp_path, mock_ffmpeg_c
         original_bpm=200,
         target_bpm=100,
         temp_dir=tmp_path,
+        original_duration_secs=240,
     )
 
-    assert result == Path("/music/song.mp3")
+    # duration_secs must pass through unchanged — no file was stretched
+    assert result == (Path("/music/song.mp3"), 240)
     mock_ffmpeg_convert.assert_not_called()
     mock_librosa_load.assert_not_called()
 
@@ -122,9 +134,10 @@ def test_ratio_above_max_returns_original_and_skips_load(tmp_path, mock_ffmpeg_c
         original_bpm=100,
         target_bpm=130,
         temp_dir=tmp_path,
+        original_duration_secs=240,
     )
 
-    assert result == Path("/music/song.mp3")
+    assert result == (Path("/music/song.mp3"), 240)
     mock_ffmpeg_convert.assert_not_called()
     mock_librosa_load.assert_not_called()
 
@@ -135,9 +148,10 @@ def test_ratio_near_one_returns_original_and_skips_load(tmp_path, mock_ffmpeg_co
         original_bpm=150,
         target_bpm=151.5,  # ratio == 1.01, under the 0.02 threshold
         temp_dir=tmp_path,
+        original_duration_secs=240,
     )
 
-    assert result == Path("/music/song.mp3")
+    assert result == (Path("/music/song.mp3"), 240)
     mock_ffmpeg_convert.assert_not_called()
     mock_librosa_load.assert_not_called()
 
@@ -153,6 +167,7 @@ def test_zero_original_bpm_raises_audio_processing_error(tmp_path, mock_ffmpeg_c
             original_bpm=0,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
     mock_ffmpeg_convert.assert_not_called()
@@ -166,6 +181,7 @@ def test_negative_original_bpm_raises_audio_processing_error(tmp_path, mock_ffmp
             original_bpm=-140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
     mock_ffmpeg_convert.assert_not_called()
@@ -187,6 +203,7 @@ def test_ffmpeg_not_installed_raises_audio_processing_error(tmp_path, mock_libro
             original_bpm=140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
     mock_librosa_load.assert_not_called()
@@ -209,6 +226,7 @@ def test_ffmpeg_conversion_failure_raises_audio_processing_error(tmp_path, mock_
             original_bpm=140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
     mock_librosa_load.assert_not_called()
@@ -229,6 +247,7 @@ def test_librosa_load_failure_raises_audio_processing_error(tmp_path, mock_ffmpe
             original_bpm=140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
 
@@ -247,6 +266,7 @@ def test_time_stretch_failure_raises_audio_processing_error(
             original_bpm=140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
 
@@ -263,6 +283,7 @@ def test_soundfile_write_failure_raises_audio_processing_error(
             original_bpm=140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
 
@@ -283,6 +304,7 @@ def test_temp_wav_removed_even_when_stretch_fails(tmp_path, mock_ffmpeg_convert,
             original_bpm=140,
             target_bpm=165,
             temp_dir=tmp_path,
+            original_duration_secs=240,
         )
 
     assert not temp_wav.exists()
@@ -319,6 +341,7 @@ def test_stereo_input_is_stretched_per_channel_and_recombined(
         original_bpm=140,
         target_bpm=165,
         temp_dir=tmp_path,
+        original_duration_secs=240,
     )
 
     # time_stretch only accepts 1D arrays, so it must be called once per channel

@@ -21,6 +21,22 @@ from core.run_context import RunContext
 
 logger = logging.getLogger("running_playlist")
 
+# How many of the BPM-closest eligible candidates get considered for energy
+# match. Keeping this small means stretching only ever closes a small
+# residual gap instead of doing the primary work of reaching the target.
+_BPM_PROXIMITY_SHORTLIST_SIZE = 3
+
+
+def _bpm_distance(song: dict, slot_bpm: int) -> float:
+    """Distance from a song's own BPM to its effective target.
+
+    A half-time match (see filter_by_bpm) is compared against slot_bpm / 2 —
+    its own natural range — not the raw slot_bpm, since it was never a match
+    against the full target in the first place.
+    """
+    effective_target = slot_bpm / 2 if song.get("half_time_match") else slot_bpm
+    return abs(song["bpm"] - effective_target)
+
 
 def _pick_song(
     candidates: list[dict],
@@ -36,6 +52,10 @@ def _pick_song(
       2. Unused tracks at doubled BPM tolerance
       3. Repeat candidates spaced >= REPEAT_ALLOWED_AFTER slots
       4. Raise ValueError if nothing qualifies
+
+    Within whichever tier of eligible candidates is used, the
+    _BPM_PROXIMITY_SHORTLIST_SIZE closest by BPM are shortlisted first, and
+    only that shortlist is then narrowed by energy match.
     """
     used_set = set(used_paths)
     unused = [s for s in candidates if s["path"] not in used_set]
@@ -61,7 +81,9 @@ def _pick_song(
     last = used_paths[-1] if used_paths else None
     pool = [s for s in eligible if s["path"] != last] or eligible
 
-    return min(pool, key=lambda s: abs(s["energy"] - slot_energy))
+    shortlist = sorted(pool, key=lambda s: _bpm_distance(s, slot_bpm))[:_BPM_PROXIMITY_SHORTLIST_SIZE]
+
+    return min(shortlist, key=lambda s: abs(s["energy"] - slot_energy))
 
 
 def build_playlist(

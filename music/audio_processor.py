@@ -47,8 +47,23 @@ def _convert_to_wav(source_path: str, temp_wav: Path) -> None:
         raise AudioProcessingError(f"Could not convert {filename} to WAV: {stderr}") from exc
 
 
-def stretch_track(source_path: str, original_bpm: float, target_bpm: float, temp_dir: Path) -> Path:
-    """Time-stretch a track to the target BPM and write it to temp_dir, or return the original path unmodified if stretching isn't needed or the ratio is out of bounds."""
+def stretch_track(
+    source_path: str,
+    original_bpm: float,
+    target_bpm: float,
+    temp_dir: Path,
+    original_duration_secs: float,
+) -> tuple[Path, float]:
+    """Time-stretch a track to the target BPM and write it to temp_dir.
+
+    Returns (path, duration_secs) for whichever file should actually be played:
+    the stretched output, or the original path unmodified if stretching isn't
+    needed or the ratio is out of bounds. duration_secs always reflects the
+    real duration of that returned file — original_duration_secs when the
+    original path is returned, or measured directly from the stretched audio's
+    sample count and sample rate (never re-read from disk, never derived by
+    dividing the original duration by the ratio) when a new file is written.
+    """
     filename = Path(source_path).name
 
     if original_bpm <= 0:
@@ -61,10 +76,10 @@ def stretch_track(source_path: str, original_bpm: float, target_bpm: float, temp
 
     if ratio < MIN_STRETCH_RATIO or ratio > MAX_STRETCH_RATIO:
         logger.warning("BPM ratio %.2f outside bounds for %s — playing original", ratio, filename)
-        return Path(source_path)
+        return Path(source_path), original_duration_secs
 
     if abs(ratio - 1.0) < STRETCH_SAME_BPM_THRESHOLD:
-        return Path(source_path)
+        return Path(source_path), original_duration_secs
 
     temp_wav = temp_dir / f"{Path(source_path).stem}_source.wav"
     try:
@@ -95,10 +110,14 @@ def stretch_track(source_path: str, original_bpm: float, target_bpm: float, temp
             sf.write(str(out_path), data, sr)
         except Exception as exc:
             raise AudioProcessingError(f"Could not write stretched output for {filename}: {exc}") from exc
+
+        # time_stretch doesn't guarantee an exact 1/ratio length, so measure the
+        # actual written audio instead of deriving it from original_duration_secs.
+        actual_duration_secs = int(round(data.shape[0] / sr))
     finally:
         temp_wav.unlink(missing_ok=True)
 
-    return out_path
+    return out_path, actual_duration_secs
 
 
 def estimate_processing_time(tracks: list[dict]) -> float:
