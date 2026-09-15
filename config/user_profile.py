@@ -1,3 +1,5 @@
+"""Loads the user's personal settings (stride length, etc.) with defaults on any error."""
+
 from __future__ import annotations
 
 import json
@@ -20,7 +22,9 @@ def load_profile() -> dict:
         with open(USER_PROFILE_PATH) as f:
             return json.load(f)
     except FileNotFoundError:
-        logger.warning("user_profile.json not found at %s — using defaults", USER_PROFILE_PATH)
+        logger.warning(
+            "user_profile.json not found at %s — using defaults", USER_PROFILE_PATH
+        )
     except json.JSONDecodeError as exc:
         logger.warning("user_profile.json is malformed (%s) — using defaults", exc)
     return dict(_DEFAULTS)

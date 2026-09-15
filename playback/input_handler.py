@@ -1,3 +1,5 @@
+"""Reads raw keypresses on a background thread and turns them into playback commands."""
+
 from __future__ import annotations
 
 import logging
@@ -21,9 +23,7 @@ def restore_terminal() -> None:
     if _original_terminal_settings is not None:
         try:
             termios.tcsetattr(
-                sys.stdin.fileno(),
-                termios.TCSADRAIN,
-                _original_terminal_settings,
+                sys.stdin.fileno(), termios.TCSADRAIN, _original_terminal_settings,
             )
         except Exception:
             pass
@@ -37,7 +37,7 @@ def _get_keypress() -> str:
         tty.setraw(fd)
         ch = sys.stdin.read(1)
         if ch == "\x1b":
-            ch += sys.stdin.read(2)   # consume the two-byte arrow-key suffix
+            ch += sys.stdin.read(2)  # consume the two-byte arrow-key suffix
         return ch
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)

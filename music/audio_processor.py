@@ -1,3 +1,5 @@
+"""Time-stretches tracks to a target BPM via ffmpeg pre-conversion and librosa."""
+
 from __future__ import annotations
 
 import logging
@@ -44,7 +46,9 @@ def _convert_to_wav(source_path: str, temp_wav: Path) -> None:
         ) from exc
     except subprocess.CalledProcessError as exc:
         stderr = exc.stderr.decode(errors="replace") if exc.stderr else str(exc)
-        raise AudioProcessingError(f"Could not convert {filename} to WAV: {stderr}") from exc
+        raise AudioProcessingError(
+            f"Could not convert {filename} to WAV: {stderr}"
+        ) from exc
 
 
 def stretch_track(
@@ -75,7 +79,9 @@ def stretch_track(
     ratio = target_bpm / original_bpm
 
     if ratio < MIN_STRETCH_RATIO or ratio > MAX_STRETCH_RATIO:
-        logger.warning("BPM ratio %.2f outside bounds for %s — playing original", ratio, filename)
+        logger.warning(
+            "BPM ratio %.2f outside bounds for %s — playing original", ratio, filename
+        )
         return Path(source_path), original_duration_secs
 
     if abs(ratio - 1.0) < STRETCH_SAME_BPM_THRESHOLD:
@@ -88,20 +94,27 @@ def stretch_track(
         try:
             y, sr = librosa.load(str(temp_wav), sr=None, mono=False)
         except Exception as exc:
-            raise AudioProcessingError(f"Could not load {filename} for stretching: {exc}") from exc
+            raise AudioProcessingError(
+                f"Could not load {filename} for stretching: {exc}"
+            ) from exc
 
         try:
             # time_stretch only accepts 1D input — stretch each channel separately
             # so stereo output is preserved rather than downmixing to mono first
             if y.ndim == 2:
                 stretched = np.stack(
-                    [librosa.effects.time_stretch(channel, rate=ratio) for channel in y],
+                    [
+                        librosa.effects.time_stretch(channel, rate=ratio)
+                        for channel in y
+                    ],
                     axis=0,
                 )
             else:
                 stretched = librosa.effects.time_stretch(y, rate=ratio)
         except Exception as exc:
-            raise AudioProcessingError(f"Could not time-stretch {filename}: {exc}") from exc
+            raise AudioProcessingError(
+                f"Could not time-stretch {filename}: {exc}"
+            ) from exc
 
         out_path = temp_dir / f"{Path(source_path).stem}_{int(target_bpm)}bpm.wav"
         try:
@@ -109,7 +122,9 @@ def stretch_track(
             data = stretched.T if stretched.ndim == 2 else stretched
             sf.write(str(out_path), data, sr)
         except Exception as exc:
-            raise AudioProcessingError(f"Could not write stretched output for {filename}: {exc}") from exc
+            raise AudioProcessingError(
+                f"Could not write stretched output for {filename}: {exc}"
+            ) from exc
 
         # time_stretch doesn't guarantee an exact 1/ratio length, so measure the
         # actual written audio instead of deriving it from original_duration_secs.

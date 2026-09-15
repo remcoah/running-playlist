@@ -1,3 +1,5 @@
+"""Scans a music folder, analyzes BPM/duration/energy per track, and maintains the song library cache."""
+
 from __future__ import annotations
 
 import json

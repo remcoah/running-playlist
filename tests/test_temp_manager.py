@@ -1,11 +1,13 @@
+"""Tests for music.temp_manager: temp directory setup, stale-content clearing, cleanup."""
+
 import pytest
 
 import music.temp_manager as temp_manager
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def isolated_temp_dir(tmp_path, monkeypatch):
@@ -20,6 +22,7 @@ def isolated_temp_dir(tmp_path, monkeypatch):
 # setup()
 # ---------------------------------------------------------------------------
 
+
 def test_setup_creates_temp_directory(isolated_temp_dir):
     temp_manager.setup()
     assert isolated_temp_dir.is_dir()
@@ -32,7 +35,9 @@ def test_setup_returns_correct_path(isolated_temp_dir):
 
 def test_setup_clears_stale_content_from_a_prior_ungraceful_exit(isolated_temp_dir):
     isolated_temp_dir.mkdir(parents=True)
-    (isolated_temp_dir / "leftover_165bpm.wav").write_text("orphaned from a crashed run")
+    (isolated_temp_dir / "leftover_165bpm.wav").write_text(
+        "orphaned from a crashed run"
+    )
 
     temp_manager.setup()
 
@@ -43,6 +48,7 @@ def test_setup_clears_stale_content_from_a_prior_ungraceful_exit(isolated_temp_d
 # ---------------------------------------------------------------------------
 # cleanup()
 # ---------------------------------------------------------------------------
+
 
 def test_cleanup_removes_directory_and_files(isolated_temp_dir):
     temp_manager.setup()
@@ -62,6 +68,7 @@ def test_cleanup_does_not_raise_if_directory_missing(isolated_temp_dir):
 # ---------------------------------------------------------------------------
 # get_temp_dir()
 # ---------------------------------------------------------------------------
+
 
 def test_get_temp_dir_raises_before_setup():
     with pytest.raises(RuntimeError):

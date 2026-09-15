@@ -4,9 +4,9 @@ Mock-based tests for playback_engine.start().
 pygame does not need to be installed — a stub is injected into sys.modules
 before the engine module is imported, and @patch replaces it per test.
 """
+import queue as q
 import sys
 from unittest.mock import MagicMock, patch
-import queue as q
 
 # Provide a pygame stub so the module can be imported without pygame installed.
 # setdefault leaves real pygame in place if it is already present.
@@ -19,8 +19,8 @@ from config.settings import INITIAL_VOLUME, VOLUME_STEP
 from core.session_controller import create_session
 from playback.playback_engine import start
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _make_state(n: int = 2, transition: str = "hardcut"):
     qd = {
@@ -51,6 +51,7 @@ def _busy_channel():
 
 
 # ── tests ─────────────────────────────────────────────────────────────────────
+
 
 @patch("playback.playback_engine.pygame")
 @patch("playback.playback_engine.time")
@@ -95,7 +96,9 @@ def test_quit_causes_loop_to_exit(mock_time, mock_pygame):
 @patch("playback.playback_engine.logger")
 @patch("playback.playback_engine.pygame")
 @patch("playback.playback_engine.time")
-def test_file_not_found_logs_error_and_advances_track(mock_time, mock_pygame, mock_logger):
+def test_file_not_found_logs_error_and_advances_track(
+    mock_time, mock_pygame, mock_logger
+):
     """A missing audio file is logged and the track is skipped; no exception is raised."""
     state = _make_state(n=1)  # single track — after skipping it, session completes
 

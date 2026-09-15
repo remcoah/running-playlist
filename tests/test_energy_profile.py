@@ -1,3 +1,5 @@
+"""Tests for core.energy_profile: BPM offset and energy target curves per profile."""
+
 import pytest
 
 from core.energy_profile import get_targets
@@ -14,15 +16,24 @@ class TestSteadyProfile:
         assert get_targets("steady", 1.0)["bpm_offset"] == 0
 
     def test_energy_target_is_constant(self):
-        assert get_targets("steady", 0.0)["energy_target"] == get_targets("steady", 1.0)["energy_target"]
+        assert (
+            get_targets("steady", 0.0)["energy_target"]
+            == get_targets("steady", 1.0)["energy_target"]
+        )
 
 
 class TestBuildProfile:
     def test_bpm_offset_lower_at_start_than_end(self):
-        assert get_targets("build", 0.0)["bpm_offset"] < get_targets("build", 1.0)["bpm_offset"]
+        assert (
+            get_targets("build", 0.0)["bpm_offset"]
+            < get_targets("build", 1.0)["bpm_offset"]
+        )
 
     def test_energy_target_greater_at_end_than_start(self):
-        assert get_targets("build", 1.0)["energy_target"] > get_targets("build", 0.0)["energy_target"]
+        assert (
+            get_targets("build", 1.0)["energy_target"]
+            > get_targets("build", 0.0)["energy_target"]
+        )
 
 
 class TestPyramidProfile:

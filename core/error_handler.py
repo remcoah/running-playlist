@@ -1,3 +1,5 @@
+"""Shared logging setup and error-handling helpers used across the app."""
+
 from __future__ import annotations
 
 import logging
@@ -11,6 +13,7 @@ T = TypeVar("T")
 def configure_logging() -> None:
     """Configure application-wide logging to file. Call once at the start of main()."""
     import config.settings as settings
+
     settings.LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         filename=str(settings.LOG_PATH),

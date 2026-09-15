@@ -1,3 +1,5 @@
+"""Tests for core.session_controller: session state transitions and command handling."""
+
 import pytest
 
 from config.settings import INITIAL_VOLUME, VOLUME_STEP
@@ -15,7 +17,12 @@ from core.session_controller import (
 def _make_queue_dict(n: int = 3) -> dict:
     return {
         "tracks": [
-            {"path": f"/songs/track_{i}.mp3", "bpm": 150, "duration_secs": 240, "energy": 0.5}
+            {
+                "path": f"/songs/track_{i}.mp3",
+                "bpm": 150,
+                "duration_secs": 240,
+                "energy": 0.5,
+            }
             for i in range(n)
         ],
         "target_bpm": 165,
@@ -123,6 +130,7 @@ class TestApplyCommand:
         state = create_session(_make_queue_dict(), "crossfade")
         apply_command(state, "QUIT")
         assert state.is_complete is True
+
 
 class TestRewindTrack:
     def test_elapsed_over_threshold_returns_restart(self):

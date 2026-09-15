@@ -1,12 +1,14 @@
+"""Centralized configuration constants for the running playlist generator."""
+
 from pathlib import Path
 
 # Project root — two levels up from this file (config/settings.py → config/ → project root)
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR: Path = Path(__file__).resolve().parent.parent
 
 # BPM
 DEFAULT_BPM_TOLERANCE: int = 15
-BPM_MIN: int = 100   # lower bound for any realistic running cadence
-BPM_MAX: int = 240   # upper bound for any realistic running cadence
+BPM_MIN: int = 100  # lower bound for any realistic running cadence
+BPM_MAX: int = 240  # upper bound for any realistic running cadence
 
 # Warmup / cooldown phases (minutes)
 WARMUP_MINS: int = 5
@@ -20,9 +22,9 @@ COOLDOWN_MAX_ENERGY: float = 0.5
 RECENTLY_PLAYED_WINDOW_MINS: int = 10_080  # 7 days
 
 # File paths — absolute, anchored to project root
-SONG_LIBRARY_PATH = BASE_DIR / "music" / "song_library.json"
-USER_PROFILE_PATH = BASE_DIR / "config" / "user_profile.json"
-DEFAULT_MUSIC_FOLDER = BASE_DIR / "songs"
+SONG_LIBRARY_PATH: Path = BASE_DIR / "music" / "song_library.json"
+USER_PROFILE_PATH: Path = BASE_DIR / "config" / "user_profile.json"
+DEFAULT_MUSIC_FOLDER: Path = BASE_DIR / "songs"
 
 # Pace / distance assumptions
 # Average distance covered per full gait cycle (left + right step) in metres
@@ -31,12 +33,12 @@ DEFAULT_STRIDE_LENGTH_M: float = 2.2
 AVERAGE_STEP_FREQUENCY_FACTOR: float = 2.0
 
 # Output — generated artefacts go to results/, source modules stay in output/
-OUTPUT_DIR = BASE_DIR / "results"
+OUTPUT_DIR: Path = BASE_DIR / "results"
 DEFAULT_OUTPUT_FORMAT: str = "m3u"
-DEFAULT_OUTPUT_PATH = OUTPUT_DIR / "playlist"
+DEFAULT_OUTPUT_PATH: Path = OUTPUT_DIR / "playlist"
 
 # Logging
-LOG_PATH = BASE_DIR / "logs" / "app.log"
+LOG_PATH: Path = BASE_DIR / "logs" / "app.log"
 LOG_LEVEL: str = "DEBUG"
 
 # Playback
@@ -46,7 +48,7 @@ DEFAULT_TRANSITION: str = "crossfade"
 DEFAULT_ENERGY_PROFILE: str = "steady"
 VOLUME_STEP: float = 0.05
 INITIAL_VOLUME: float = 0.8
-REPEAT_ALLOWED_AFTER: int = 5   # minimum slots between repeat plays of the same track
+REPEAT_ALLOWED_AFTER: int = 5  # minimum slots between repeat plays of the same track
 REWIND_THRESHOLD_SECS: int = 3
 
 # Time stretching (Phase 3)

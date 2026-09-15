@@ -1,11 +1,13 @@
+"""Tests for playback.input_handler: keypress-to-command mapping."""
+
 import queue as q
 import threading
 from unittest.mock import patch
 
 from playback.input_handler import _listen_loop, restore_terminal, start_listening
 
-
 # ── helper ───────────────────────────────────────────────────────────────────
+
 
 def _run_with_keys(*keys: str) -> q.Queue:
     """Run _listen_loop with a fixed keypress sequence, then stop via KeyboardInterrupt.
@@ -23,6 +25,7 @@ def _run_with_keys(*keys: str) -> q.Queue:
 
 
 # ── tests ─────────────────────────────────────────────────────────────────────
+
 
 def test_right_arrow_queues_skip():
     assert _run_with_keys("\x1b[C").get_nowait() == "SKIP"

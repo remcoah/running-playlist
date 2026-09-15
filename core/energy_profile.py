@@ -1,3 +1,5 @@
+"""BPM offset and energy target curves for each named energy profile."""
+
 from __future__ import annotations
 
 _PROFILES = {"steady", "build", "pyramid"}
@@ -30,6 +32,6 @@ def get_targets(profile: str, position: float) -> dict:
     # pyramid: ramp up to midpoint, mirror back down
     # intensity: 0.0 at edges → 1.0 at centre
     intensity = 1.0 - 2.0 * abs(position - 0.5)
-    bpm_offset = int(round(-5 + 15 * intensity))   # -5 at edges → +10 at peak
+    bpm_offset = int(round(-5 + 15 * intensity))  # -5 at edges → +10 at peak
     energy_target = round(0.4 + 0.5 * intensity, 3)  # 0.4 at edges → 0.9 at peak
     return {"bpm_offset": bpm_offset, "energy_target": energy_target}

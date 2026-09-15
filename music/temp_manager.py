@@ -1,3 +1,5 @@
+"""Creates and cleans up the temp directory used for time-stretched audio output."""
+
 from __future__ import annotations
 
 import logging
@@ -22,11 +24,14 @@ def setup() -> Path:
             if stale_count:
                 logger.info(
                     "setup: removed %d stale file(s) left by a prior run at %s",
-                    stale_count, temp_dir,
+                    stale_count,
+                    temp_dir,
                 )
         temp_dir.mkdir(parents=True)
     except OSError as exc:
-        raise RuntimeError(f"Could not create temp directory {temp_dir}: {exc}") from exc
+        raise RuntimeError(
+            f"Could not create temp directory {temp_dir}: {exc}"
+        ) from exc
     _initialized = True
     return temp_dir
 
@@ -47,5 +52,7 @@ def cleanup() -> None:
 def get_temp_dir() -> Path:
     """Return the temp stretch directory. Raises RuntimeError if setup() has not been called yet."""
     if not _initialized:
-        raise RuntimeError("get_temp_dir() called before setup() — call temp_manager.setup() first")
+        raise RuntimeError(
+            "get_temp_dir() called before setup() — call temp_manager.setup() first"
+        )
     return BASE_DIR / TEMP_DIR_NAME

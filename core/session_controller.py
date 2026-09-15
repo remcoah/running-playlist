@@ -1,3 +1,5 @@
+"""Tracks and mutates live playback session state (current track, volume, pause, etc.)."""
+
 from __future__ import annotations
 
 import logging
@@ -28,9 +30,7 @@ def create_session(queue_dict: dict, transition_style: str) -> SessionState:
     """
     tracks = queue_dict.get("tracks")
     if not tracks:
-        raise ValueError(
-            "queue_dict must contain a non-empty 'tracks' list."
-        )
+        raise ValueError("queue_dict must contain a non-empty 'tracks' list.")
     return SessionState(
         queue_dict=queue_dict,
         current_index=0,
@@ -90,10 +90,7 @@ def is_complete(state: SessionState) -> bool:
 def get_summary(state: SessionState) -> dict:
     """Return a snapshot of session progress for display and post-run bookkeeping."""
     return {
-        "tracks_played": min(
-            state.current_index + 1,
-            len(state.queue_dict["tracks"]),
-        ),
+        "tracks_played": min(state.current_index + 1, len(state.queue_dict["tracks"]),),
         "elapsed_mins": state.elapsed_mins,
         "played_paths": [
             t["path"] for t in state.queue_dict["tracks"][: state.current_index]

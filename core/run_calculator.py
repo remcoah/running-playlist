@@ -1,3 +1,5 @@
+"""Converts distance and pace into a run's duration and target cadence."""
+
 from config.settings import (
     AVERAGE_STEP_FREQUENCY_FACTOR,
     BPM_MAX,

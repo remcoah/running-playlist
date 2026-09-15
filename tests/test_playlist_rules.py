@@ -1,3 +1,5 @@
+"""Tests for core.playlist_rules: BPM filtering, recency exclusion, warmup/cooldown phasing."""
+
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -9,12 +11,14 @@ from core.playlist_rules import (
     filter_by_bpm,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_song(path="song.mp3", bpm=160, duration_secs=240, energy=0.8, last_played=None):
+
+def make_song(
+    path="song.mp3", bpm=160, duration_secs=240, energy=0.8, last_played=None
+):
     """Return a minimal song dict matching the project schema."""
     return {
         "path": path,
@@ -34,6 +38,7 @@ def ago(minutes: float) -> str:
 # ---------------------------------------------------------------------------
 # filter_by_bpm
 # ---------------------------------------------------------------------------
+
 
 class TestFilterByBpm:
     def test_empty_library_returns_empty(self):
@@ -70,10 +75,10 @@ class TestFilterByBpm:
 
     def test_mixed_library_filters_correctly(self):
         songs = [
-            make_song(path="a.mp3", bpm=160),   # direct match
-            make_song(path="b.mp3", bpm=80),    # half-time match
-            make_song(path="c.mp3", bpm=200),   # too fast
-            make_song(path="d.mp3", bpm=50),    # too slow
+            make_song(path="a.mp3", bpm=160),  # direct match
+            make_song(path="b.mp3", bpm=80),  # half-time match
+            make_song(path="c.mp3", bpm=200),  # too fast
+            make_song(path="d.mp3", bpm=50),  # too slow
         ]
         result = filter_by_bpm(songs, 160, 10)
         paths = [s["path"] for s in result]
@@ -86,6 +91,7 @@ class TestFilterByBpm:
 # ---------------------------------------------------------------------------
 # exclude_recently_played
 # ---------------------------------------------------------------------------
+
 
 class TestExcludeRecentlyPlayed:
     def test_empty_library_returns_empty(self):
@@ -119,20 +125,21 @@ class TestExcludeRecentlyPlayed:
 
     def test_mix_of_recent_and_old_songs(self):
         songs = [
-            make_song(path="old.mp3",    last_played=ago(200)),
+            make_song(path="old.mp3", last_played=ago(200)),
             make_song(path="recent.mp3", last_played=ago(10)),
-            make_song(path="never.mp3",  last_played=None),
+            make_song(path="never.mp3", last_played=None),
         ]
         result = exclude_recently_played(songs, within_mins=60)
         paths = [s["path"] for s in result]
-        assert "old.mp3"    in paths
-        assert "never.mp3"  in paths
+        assert "old.mp3" in paths
+        assert "never.mp3" in paths
         assert "recent.mp3" not in paths
 
 
 # ---------------------------------------------------------------------------
 # apply_warmup_cooldown
 # ---------------------------------------------------------------------------
+
 
 class TestApplyWarmupCooldown:
     def test_empty_queue_returns_empty_with_zero_counts(self):
@@ -159,9 +166,13 @@ class TestApplyWarmupCooldown:
 
     def test_cooldown_gets_calmest_songs(self):
         # Only one song is below COOLDOWN_MAX_ENERGY — it should go to cooldown
-        calm   = make_song(path="calm.mp3",   energy=COOLDOWN_MAX_ENERGY - 0.1, duration_secs=300)
-        medium = make_song(path="medium.mp3", energy=WARMUP_MAX_ENERGY - 0.01,  duration_secs=300)
-        loud   = make_song(path="loud.mp3",   energy=0.9,                       duration_secs=300)
+        calm = make_song(
+            path="calm.mp3", energy=COOLDOWN_MAX_ENERGY - 0.1, duration_secs=300
+        )
+        medium = make_song(
+            path="medium.mp3", energy=WARMUP_MAX_ENERGY - 0.01, duration_secs=300
+        )
+        loud = make_song(path="loud.mp3", energy=0.9, duration_secs=300)
 
         tracks, warmup_count, cooldown_count = apply_warmup_cooldown(
             [calm, medium, loud], warmup_mins=5, cooldown_mins=5
@@ -171,33 +182,33 @@ class TestApplyWarmupCooldown:
 
     def test_warmup_songs_come_before_main(self):
         # calm goes to cooldown, medium goes to warmup, loud goes to main
-        calm   = make_song(path="calm.mp3",   energy=0.3, duration_secs=300)
+        calm = make_song(path="calm.mp3", energy=0.3, duration_secs=300)
         medium = make_song(path="medium.mp3", energy=0.55, duration_secs=300)
-        loud   = make_song(path="loud.mp3",   energy=0.9, duration_secs=300)
+        loud = make_song(path="loud.mp3", energy=0.9, duration_secs=300)
 
         tracks, warmup_count, cooldown_count = apply_warmup_cooldown(
             [calm, medium, loud], warmup_mins=5, cooldown_mins=5
         )
         assert warmup_count >= 1
-        assert tracks[0]["path"] == "medium.mp3"   # warmup is first
-        assert tracks[-1]["path"] == "calm.mp3"    # cooldown is last
+        assert tracks[0]["path"] == "medium.mp3"  # warmup is first
+        assert tracks[-1]["path"] == "calm.mp3"  # cooldown is last
 
     def test_order_is_warmup_then_main_then_cooldown(self):
         songs = [
             make_song(path="a.mp3", energy=0.2, duration_secs=300),  # → cooldown
-            make_song(path="b.mp3", energy=0.55, duration_secs=300), # → warmup
-            make_song(path="c.mp3", energy=0.95, duration_secs=300), # → main
+            make_song(path="b.mp3", energy=0.55, duration_secs=300),  # → warmup
+            make_song(path="c.mp3", energy=0.95, duration_secs=300),  # → main
         ]
         tracks, warmup_count, cooldown_count = apply_warmup_cooldown(
             songs, warmup_mins=5, cooldown_mins=5
         )
-        assert tracks[0]["path"] == "b.mp3"   # warmup
-        assert tracks[1]["path"] == "c.mp3"   # main
-        assert tracks[2]["path"] == "a.mp3"   # cooldown
+        assert tracks[0]["path"] == "b.mp3"  # warmup
+        assert tracks[1]["path"] == "c.mp3"  # main
+        assert tracks[2]["path"] == "a.mp3"  # cooldown
 
     def test_phase_counts_match_actual_positions(self):
         songs = [
-            make_song(path="a.mp3", energy=0.2,  duration_secs=300),
+            make_song(path="a.mp3", energy=0.2, duration_secs=300),
             make_song(path="b.mp3", energy=0.55, duration_secs=300),
             make_song(path="c.mp3", energy=0.95, duration_secs=300),
         ]
@@ -206,7 +217,7 @@ class TestApplyWarmupCooldown:
         )
         cooldown_start = len(tracks) - cooldown_count
         # First warmup_count tracks should be the lowest-energy non-cooldown songs
-        warmup_tracks   = tracks[:warmup_count]
+        warmup_tracks = tracks[:warmup_count]
         cooldown_tracks = tracks[cooldown_start:]
         for w in warmup_tracks:
             assert w["energy"] <= WARMUP_MAX_ENERGY
@@ -216,8 +227,7 @@ class TestApplyWarmupCooldown:
     def test_duration_budget_limits_phase_size(self):
         # Three calm songs but warmup budget only covers one (300s = 5 min)
         songs = [
-            make_song(path=f"{i}.mp3", energy=0.4, duration_secs=300)
-            for i in range(4)
+            make_song(path=f"{i}.mp3", energy=0.4, duration_secs=300) for i in range(4)
         ]
         _, warmup_count, cooldown_count = apply_warmup_cooldown(
             songs, warmup_mins=5, cooldown_mins=5

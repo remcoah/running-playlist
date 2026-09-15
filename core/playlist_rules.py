@@ -1,3 +1,5 @@
+"""Pure filtering and ordering rules used to assemble a playlist."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -49,10 +51,7 @@ def exclude_recently_played(songs: list[dict], within_mins: int) -> list[dict]:
 
 
 def get_repeat_candidates(
-    candidates: list[dict],
-    used_paths: list[str],
-    target_bpm: int,
-    tolerance: int,
+    candidates: list[dict], used_paths: list[str], target_bpm: int, tolerance: int,
 ) -> list[dict]:
     """Return previously used tracks not in the last REPEAT_ALLOWED_AFTER slots, filtered by BPM.
 
@@ -60,7 +59,11 @@ def get_repeat_candidates(
     """
     recently_used = set(used_paths[-REPEAT_ALLOWED_AFTER:])
     all_used = set(used_paths)
-    eligible = [s for s in candidates if s["path"] in all_used and s["path"] not in recently_used]
+    eligible = [
+        s
+        for s in candidates
+        if s["path"] in all_used and s["path"] not in recently_used
+    ]
     return filter_by_bpm(eligible, target_bpm, tolerance)
 
 

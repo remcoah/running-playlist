@@ -1,3 +1,5 @@
+"""Tests for music.audio_processor: stretch bounds, ffmpeg pre-conversion, error wrapping."""
+
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -9,10 +11,10 @@ import music.audio_processor as audio_processor
 from config.settings import PROCESSING_TIME_MULTIPLIER
 from music.audio_processor import AudioProcessingError
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_ffmpeg_convert(monkeypatch):
@@ -49,6 +51,7 @@ def mock_sf_write(monkeypatch):
 # In-bounds stretching
 # ---------------------------------------------------------------------------
 
+
 def test_ratio_within_bounds_triggers_stretch_and_write(
     tmp_path, mock_ffmpeg_convert, mock_librosa_load, mock_time_stretch, mock_sf_write
 ):
@@ -62,7 +65,9 @@ def test_ratio_within_bounds_triggers_stretch_and_write(
 
     expected_temp_wav = tmp_path / "song_source.wav"
     mock_ffmpeg_convert.assert_called_once()
-    mock_librosa_load.assert_called_once_with(str(expected_temp_wav), sr=None, mono=False)
+    mock_librosa_load.assert_called_once_with(
+        str(expected_temp_wav), sr=None, mono=False
+    )
     mock_time_stretch.assert_called_once()
     mock_sf_write.assert_called_once()
     assert path == tmp_path / "song_165bpm.wav"
@@ -113,7 +118,10 @@ def test_ffmpeg_conversion_runs_before_librosa_load_and_never_sees_source_path(
 # Out-of-bounds ratios — return original, no processing
 # ---------------------------------------------------------------------------
 
-def test_ratio_below_min_returns_original_and_skips_load(tmp_path, mock_ffmpeg_convert, mock_librosa_load):
+
+def test_ratio_below_min_returns_original_and_skips_load(
+    tmp_path, mock_ffmpeg_convert, mock_librosa_load
+):
     result = audio_processor.stretch_track(
         source_path="/music/song.mp3",
         original_bpm=200,
@@ -128,7 +136,9 @@ def test_ratio_below_min_returns_original_and_skips_load(tmp_path, mock_ffmpeg_c
     mock_librosa_load.assert_not_called()
 
 
-def test_ratio_above_max_returns_original_and_skips_load(tmp_path, mock_ffmpeg_convert, mock_librosa_load):
+def test_ratio_above_max_returns_original_and_skips_load(
+    tmp_path, mock_ffmpeg_convert, mock_librosa_load
+):
     result = audio_processor.stretch_track(
         source_path="/music/song.mp3",
         original_bpm=100,
@@ -142,7 +152,9 @@ def test_ratio_above_max_returns_original_and_skips_load(tmp_path, mock_ffmpeg_c
     mock_librosa_load.assert_not_called()
 
 
-def test_ratio_near_one_returns_original_and_skips_load(tmp_path, mock_ffmpeg_convert, mock_librosa_load):
+def test_ratio_near_one_returns_original_and_skips_load(
+    tmp_path, mock_ffmpeg_convert, mock_librosa_load
+):
     result = audio_processor.stretch_track(
         source_path="/music/song.mp3",
         original_bpm=150,
@@ -160,7 +172,10 @@ def test_ratio_near_one_returns_original_and_skips_load(tmp_path, mock_ffmpeg_co
 # Invalid original_bpm — must not crash on division by zero
 # ---------------------------------------------------------------------------
 
-def test_zero_original_bpm_raises_audio_processing_error(tmp_path, mock_ffmpeg_convert, mock_librosa_load):
+
+def test_zero_original_bpm_raises_audio_processing_error(
+    tmp_path, mock_ffmpeg_convert, mock_librosa_load
+):
     with pytest.raises(AudioProcessingError, match="song.mp3"):
         audio_processor.stretch_track(
             source_path="/music/song.mp3",
@@ -174,7 +189,9 @@ def test_zero_original_bpm_raises_audio_processing_error(tmp_path, mock_ffmpeg_c
     mock_librosa_load.assert_not_called()
 
 
-def test_negative_original_bpm_raises_audio_processing_error(tmp_path, mock_ffmpeg_convert, mock_librosa_load):
+def test_negative_original_bpm_raises_audio_processing_error(
+    tmp_path, mock_ffmpeg_convert, mock_librosa_load
+):
     with pytest.raises(AudioProcessingError, match="song.mp3"):
         audio_processor.stretch_track(
             source_path="/music/song.mp3",
@@ -192,9 +209,14 @@ def test_negative_original_bpm_raises_audio_processing_error(tmp_path, mock_ffmp
 # ffmpeg conversion failures
 # ---------------------------------------------------------------------------
 
-def test_ffmpeg_not_installed_raises_audio_processing_error(tmp_path, mock_librosa_load, monkeypatch):
+
+def test_ffmpeg_not_installed_raises_audio_processing_error(
+    tmp_path, mock_librosa_load, monkeypatch
+):
     monkeypatch.setattr(
-        audio_processor.subprocess, "run", MagicMock(side_effect=FileNotFoundError("no ffmpeg"))
+        audio_processor.subprocess,
+        "run",
+        MagicMock(side_effect=FileNotFoundError("no ffmpeg")),
     )
 
     with pytest.raises(AudioProcessingError, match="ffmpeg"):
@@ -209,7 +231,9 @@ def test_ffmpeg_not_installed_raises_audio_processing_error(tmp_path, mock_libro
     mock_librosa_load.assert_not_called()
 
 
-def test_ffmpeg_conversion_failure_raises_audio_processing_error(tmp_path, mock_librosa_load, monkeypatch):
+def test_ffmpeg_conversion_failure_raises_audio_processing_error(
+    tmp_path, mock_librosa_load, monkeypatch
+):
     monkeypatch.setattr(
         audio_processor.subprocess,
         "run",
@@ -236,7 +260,10 @@ def test_ffmpeg_conversion_failure_raises_audio_processing_error(tmp_path, mock_
 # Error wrapping
 # ---------------------------------------------------------------------------
 
-def test_librosa_load_failure_raises_audio_processing_error(tmp_path, mock_ffmpeg_convert, monkeypatch):
+
+def test_librosa_load_failure_raises_audio_processing_error(
+    tmp_path, mock_ffmpeg_convert, monkeypatch
+):
     monkeypatch.setattr(
         audio_processor.librosa, "load", MagicMock(side_effect=RuntimeError("bad file"))
     )
@@ -291,7 +318,10 @@ def test_soundfile_write_failure_raises_audio_processing_error(
 # Intermediate WAV cleanup
 # ---------------------------------------------------------------------------
 
-def test_temp_wav_removed_even_when_stretch_fails(tmp_path, mock_ffmpeg_convert, monkeypatch):
+
+def test_temp_wav_removed_even_when_stretch_fails(
+    tmp_path, mock_ffmpeg_convert, monkeypatch
+):
     temp_wav = tmp_path / "song_source.wav"
     temp_wav.write_bytes(b"fake wav data")
     monkeypatch.setattr(
@@ -314,6 +344,7 @@ def test_temp_wav_removed_even_when_stretch_fails(tmp_path, mock_ffmpeg_convert,
 # estimate_processing_time()
 # ---------------------------------------------------------------------------
 
+
 def test_estimate_processing_time_applies_formula_across_tracks():
     tracks = [
         {"duration_secs": 180},
@@ -327,6 +358,7 @@ def test_estimate_processing_time_applies_formula_across_tracks():
 # ---------------------------------------------------------------------------
 # Stereo handling
 # ---------------------------------------------------------------------------
+
 
 def test_stereo_input_is_stretched_per_channel_and_recombined(
     tmp_path, mock_ffmpeg_convert, mock_time_stretch, mock_sf_write, monkeypatch

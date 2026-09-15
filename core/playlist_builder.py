@@ -1,3 +1,5 @@
+"""Builds a segment-aware playlist by picking one song per time slot to match BPM and energy targets."""
+
 from __future__ import annotations
 
 import logging
@@ -65,12 +67,16 @@ def _pick_song(
     if not eligible:
         logger.warning(
             "No unused tracks for BPM %d ± %d. Widening search to ± %d.",
-            slot_bpm, tolerance, tolerance * 2,
+            slot_bpm,
+            tolerance,
+            tolerance * 2,
         )
         eligible = filter_by_bpm(unused, slot_bpm, tolerance * 2)
 
     if not eligible:
-        eligible = get_repeat_candidates(candidates, used_paths, slot_bpm, tolerance * 2)
+        eligible = get_repeat_candidates(
+            candidates, used_paths, slot_bpm, tolerance * 2
+        )
 
     if not eligible:
         raise ValueError(
@@ -81,7 +87,9 @@ def _pick_song(
     last = used_paths[-1] if used_paths else None
     pool = [s for s in eligible if s["path"] != last] or eligible
 
-    shortlist = sorted(pool, key=lambda s: _bpm_distance(s, slot_bpm))[:_BPM_PROXIMITY_SHORTLIST_SIZE]
+    shortlist = sorted(pool, key=lambda s: _bpm_distance(s, slot_bpm))[
+        :_BPM_PROXIMITY_SHORTLIST_SIZE
+    ]
 
     return min(shortlist, key=lambda s: abs(s["energy"] - slot_energy))
 
@@ -93,7 +101,11 @@ def build_playlist(
     ignore_recent: bool = False,
 ) -> dict:
     """Build a segment-aware playlist, picking one song per time slot to match the profile's BPM and energy targets."""
-    candidates = library if ignore_recent else exclude_recently_played(library, RECENTLY_PLAYED_WINDOW_MINS)
+    candidates = (
+        library
+        if ignore_recent
+        else exclude_recently_played(library, RECENTLY_PLAYED_WINDOW_MINS)
+    )
 
     total_slots = max(1, round(context.duration_mins / SLOT_DURATION_MINS))
     used_paths: list[str] = []
@@ -105,8 +117,11 @@ def build_playlist(
         slot_bpm = context.target_bpm + targets["bpm_offset"]
 
         song = _pick_song(
-            candidates, slot_bpm, targets["energy_target"],
-            context.bpm_tolerance, used_paths,
+            candidates,
+            slot_bpm,
+            targets["energy_target"],
+            context.bpm_tolerance,
+            used_paths,
         )
         # Copy rather than mutate song in place — repeated tracks (see
         # get_repeat_candidates) share the same dict object across slots,
@@ -114,7 +129,9 @@ def build_playlist(
         tracks.append({**song, "slot_target_bpm": slot_bpm})
         used_paths.append(song["path"])
 
-    tracks, warmup_count, cooldown_count = apply_warmup_cooldown(tracks, WARMUP_MINS, COOLDOWN_MINS)
+    tracks, warmup_count, cooldown_count = apply_warmup_cooldown(
+        tracks, WARMUP_MINS, COOLDOWN_MINS
+    )
 
     return {
         "tracks": tracks,

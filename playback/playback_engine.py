@@ -1,3 +1,5 @@
+"""Runs the real-time playback loop: track loading, crossfade timing, and transport controls."""
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +24,7 @@ _WINDOW_MB_LIMIT = 500
 _WINDOW_SIZE = 5
 
 
-def _load_sound(path: str):
+def _load_sound(path: str) -> pygame.mixer.Sound | None:
     """Load a pygame Sound from path; log an error and return None on any failure."""
     try:
         return pygame.mixer.Sound(path)
@@ -56,7 +58,9 @@ def preload_playlist(queue_dict: dict) -> dict[str, pygame.mixer.Sound]:
         logger.warning(
             "Estimated playlist memory %.0f MB exceeds %d MB limit; "
             "pre-loading first %d tracks and using a sliding window.",
-            estimated_mb, _WINDOW_MB_LIMIT, _WINDOW_SIZE,
+            estimated_mb,
+            _WINDOW_MB_LIMIT,
+            _WINDOW_SIZE,
         )
         tracks_to_load = tracks[:_WINDOW_SIZE]
     else:
@@ -86,7 +90,9 @@ def _ensure_cached(sound_cache: dict, queue_dict: dict, idx: int) -> None:
             sound_cache[path] = sound
 
 
-def _load_and_play(channel, track: dict, volume: float, sound_cache: dict) -> bool:
+def _load_and_play(
+    channel: pygame.mixer.Channel, track: dict, volume: float, sound_cache: dict
+) -> bool:
     """Start playing a track on the given channel from the pre-loaded cache; return True on success."""
     path = track.get("playback_path", track["path"])
     sound = sound_cache.get(path)
@@ -159,7 +165,11 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                         track = current_track(state)
                         if _load_and_play(ch_a, track, state.volume, sound_cache):
                             track_start_time = time.monotonic()
-                            _ensure_cached(sound_cache, state.queue_dict, state.current_index + _WINDOW_SIZE - 1)
+                            _ensure_cached(
+                                sound_cache,
+                                state.queue_dict,
+                                state.current_index + _WINDOW_SIZE - 1,
+                            )
                             break
                         logger.error("Skipping unloadable track: %s", track["path"])
                         advance_track(state)
@@ -179,7 +189,11 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                         track = current_track(state)
                         if _load_and_play(ch_a, track, state.volume, sound_cache):
                             track_start_time = time.monotonic()
-                            _ensure_cached(sound_cache, state.queue_dict, state.current_index + _WINDOW_SIZE - 1)
+                            _ensure_cached(
+                                sound_cache,
+                                state.queue_dict,
+                                state.current_index + _WINDOW_SIZE - 1,
+                            )
                             break
                         logger.error("Skipping unloadable track: %s", track["path"])
                         advance_track(state)
@@ -214,7 +228,11 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                     # New track has been audible since crossfade_start_time
                     track_start_time = crossfade_start_time
                     crossfade_start_time = None
-                    _ensure_cached(sound_cache, state.queue_dict, state.current_index + _WINDOW_SIZE - 1)
+                    _ensure_cached(
+                        sound_cache,
+                        state.queue_dict,
+                        state.current_index + _WINDOW_SIZE - 1,
+                    )
 
             elif not ch_a.get_busy():
                 # Track finished naturally (hardcut end or track ran to completion)
@@ -224,7 +242,11 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                         track = current_track(state)
                         if _load_and_play(ch_a, track, state.volume, sound_cache):
                             track_start_time = time.monotonic()
-                            _ensure_cached(sound_cache, state.queue_dict, state.current_index + _WINDOW_SIZE - 1)
+                            _ensure_cached(
+                                sound_cache,
+                                state.queue_dict,
+                                state.current_index + _WINDOW_SIZE - 1,
+                            )
                             break
                         logger.error("Skipping unloadable track: %s", track["path"])
                         advance_track(state)
@@ -235,9 +257,8 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                 time_remaining = track["duration_secs"] - elapsed
                 next_idx = state.current_index + 1
 
-                if (
-                    time_remaining <= CROSSFADE_DURATION_SECS
-                    and next_idx < len(state.queue_dict["tracks"])
+                if time_remaining <= CROSSFADE_DURATION_SECS and next_idx < len(
+                    state.queue_dict["tracks"]
                 ):
                     next_track = state.queue_dict["tracks"][next_idx]
                     next_path = next_track.get("playback_path", next_track["path"])

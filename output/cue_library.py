@@ -1,3 +1,5 @@
+"""Builds and writes warmup/main/cooldown phase-marker cue sheets."""
+
 from __future__ import annotations
 
 import json

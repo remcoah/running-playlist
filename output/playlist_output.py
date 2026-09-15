@@ -1,3 +1,5 @@
+"""Writes playlists to M3U/JSON and formats the console summary view."""
+
 from __future__ import annotations
 
 import json
@@ -50,7 +52,11 @@ def format_summary(queue_dict: dict) -> str:
         bpm_display = f"{track['bpm']} BPM"
         original_bpm = track.get("original_bpm")
         target_bpm = track.get("target_bpm")
-        if original_bpm is not None and target_bpm is not None and abs(target_bpm - original_bpm) > 1:
+        if (
+            original_bpm is not None
+            and target_bpm is not None
+            and abs(target_bpm - original_bpm) > 1
+        ):
             bpm_display = f"{round(original_bpm)}→{round(target_bpm)} BPM"
 
         lines.append(

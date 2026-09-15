@@ -1,3 +1,5 @@
+"""CLI entry point: parses args and orchestrates the full playlist generation and playback pipeline."""
+
 import argparse
 import queue
 import sys
@@ -7,19 +9,24 @@ from pathlib import Path
 import config.settings as settings
 from config.user_profile import load_profile
 from core.error_handler import configure_logging, safe_call, warn
-from core.run_calculator import build_run_context
-from music.audio_analyzer import clear_play_history, get_library, mark_played, scan_folder
-from music import audio_processor, temp_manager
 from core.playlist_builder import build_playlist
-from output.playlist_output import format_summary, write_json, write_m3u
+from core.run_calculator import build_run_context
+from music import audio_processor, temp_manager
+from music.audio_analyzer import (
+    clear_play_history,
+    get_library,
+    mark_played,
+    scan_folder,
+)
 from output.cue_library import build_cues, write_cue_file
+from output.playlist_output import format_summary, write_json, write_m3u
 
 
 def _parse_args() -> argparse.Namespace:
     """Define and parse CLI arguments, returning the populated namespace."""
     parser = argparse.ArgumentParser(description="Generate a running playlist.")
-    parser.add_argument("--distance", type=float, required=True,  help="Distance in km")
-    parser.add_argument("--pace",     type=float, required=True,  help="Pace in min/km")
+    parser.add_argument("--distance", type=float, required=True, help="Distance in km")
+    parser.add_argument("--pace", type=float, required=True, help="Pace in min/km")
     parser.add_argument(
         "--folder",
         type=str,
@@ -93,8 +100,10 @@ def main() -> None:
         print("Error: could not calculate run context. Check --distance and --pace.")
         sys.exit(1)
 
-    print(f"Run: {args.distance} km at {args.pace} min/km → "
-          f"{context.duration_mins:.1f} min, target {context.target_bpm} BPM")
+    print(
+        f"Run: {args.distance} km at {args.pace} min/km → "
+        f"{context.duration_mins:.1f} min, target {context.target_bpm} BPM"
+    )
 
     # Step 3: optionally clear play history before scanning
     if args.clear_history:
@@ -160,7 +169,9 @@ def main() -> None:
         label="build_playlist",
     )
     if not playlist or not playlist.get("tracks"):
-        print("Error: could not build a playlist. Try widening BPM tolerance or adding more songs.")
+        print(
+            "Error: could not build a playlist. Try widening BPM tolerance or adding more songs."
+        )
         sys.exit(1)
 
     track_count = len(playlist["tracks"])
@@ -224,8 +235,10 @@ def main() -> None:
                 # library's pre-stretch scan value.
                 track["duration_secs"] = actual_duration_secs
             except audio_processor.AudioProcessingError as e:
-                print(f"  Warning: could not stretch {name} — playing "
-                      f"original at {track['bpm']} BPM")
+                print(
+                    f"  Warning: could not stretch {name} — playing "
+                    f"original at {track['bpm']} BPM"
+                )
                 warn(f"Stretch failed for {name}: {e}")
                 track["playback_path"] = track["path"]
                 track["original_bpm"] = track["bpm"]
@@ -241,14 +254,24 @@ def main() -> None:
             base_output = Path(args.output)
             output_path = base_output.parent / (base_output.name + f".{args.format}")
             if args.format == "m3u":
-                safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
+                safe_call(
+                    write_m3u, playlist, output_path, fallback=None, label="write_m3u"
+                )
             else:
-                safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
+                safe_call(
+                    write_json, playlist, output_path, fallback=None, label="write_json"
+                )
 
             cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
             if cues:
                 cue_path = base_output.parent / (base_output.name + ".cue.json")
-                safe_call(write_cue_file, cues, cue_path, fallback=None, label="write_cue_file")
+                safe_call(
+                    write_cue_file,
+                    cues,
+                    cue_path,
+                    fallback=None,
+                    label="write_cue_file",
+                )
 
             print(f"Saved → {output_path}")
             return
@@ -284,7 +307,12 @@ def main() -> None:
             print("Run interrupted.")
             summary = get_summary(state)
             if summary["played_paths"]:
-                safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
+                safe_call(
+                    mark_played,
+                    summary["played_paths"],
+                    fallback=None,
+                    label="mark_played",
+                )
             return
 
         restore_terminal()
@@ -296,10 +324,16 @@ def main() -> None:
         base_output = Path(args.output)
         output_path = base_output.parent / (base_output.name + f".{args.format}")
         if args.format == "m3u":
-            safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
+            safe_call(
+                write_m3u, playlist, output_path, fallback=None, label="write_m3u"
+            )
         else:
-            safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
-        safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
+            safe_call(
+                write_json, playlist, output_path, fallback=None, label="write_json"
+            )
+        safe_call(
+            mark_played, summary["played_paths"], fallback=None, label="mark_played"
+        )
         print(f"Saved → {output_path}")
     finally:
         temp_manager.cleanup()
