@@ -6,9 +6,10 @@ from pathlib import Path
 
 import config.settings as settings
 from config.user_profile import load_profile
-from core.error_handler import configure_logging, safe_call
+from core.error_handler import configure_logging, safe_call, warn
 from core.run_calculator import build_run_context
 from music.audio_analyzer import clear_play_history, get_library, mark_played, scan_folder
+from music import audio_processor, temp_manager
 from core.playlist_builder import build_playlist
 from output.playlist_output import format_summary, write_json, write_m3u
 from output.cue_library import build_cues, write_cue_file
@@ -166,74 +167,137 @@ def main() -> None:
     total_mins = playlist["total_duration_secs"] // 60
     print(f"Playlist: {track_count} tracks, {total_mins} min total")
 
-    # Step 7: print playlist summary
-    print(format_summary(playlist))
+    # Step 6.5: stretch tracks to the target BPM before the summary or playback starts
+    try:
+        temp_dir = temp_manager.setup()
+    except RuntimeError as e:
+        print(f"Error: could not create temp directory — {e}")
+        sys.exit(1)
 
-    # ── Phase 1 (--no-playback) path: write files and exit ───────────────────
-    if args.no_playback:
+    # Everything below runs with a live temp dir — guarantee cleanup on the way
+    # out no matter how we leave (normal return, --no-playback return, a
+    # RuntimeError/KeyboardInterrupt handled below, or anything unanticipated).
+    try:
+        tracks = playlist["tracks"]
+        n = len(tracks)
+        est = audio_processor.estimate_processing_time(tracks)
+
+        min_target = min(t.get("slot_target_bpm", context.target_bpm) for t in tracks)
+        max_target = max(t.get("slot_target_bpm", context.target_bpm) for t in tracks)
+
+        print("Preparing your playlist...")
+        if min_target == max_target:
+            print(f"Stretching {n} tracks to {min_target} BPM")
+        else:
+            print(f"Stretching {n} tracks to {min_target}-{max_target} BPM")
+        print(f"Estimated time: ~{est:.0f} seconds\n")
+
+        for i, track in enumerate(tracks):
+            name = Path(track["path"]).name
+            print(f"  [{i+1}/{n}] {name}", end="\r", flush=True)
+            slot_target_bpm = track.get("slot_target_bpm")
+            if slot_target_bpm is None:
+                warn(f"No slot_target_bpm for {name} — falling back to flat target BPM")
+                slot_target_bpm = context.target_bpm
+
+            # A half-time-matched track (see filter_by_bpm) plays naturally at
+            # roughly half the slot's cadence — stretch toward that, not the
+            # full slot target, or we'd be asking for a ~2x speedup.
+            if track.get("half_time_match"):
+                effective_target = slot_target_bpm / 2
+            else:
+                effective_target = slot_target_bpm
+
+            try:
+                playback_path = audio_processor.stretch_track(
+                    source_path=track["path"],
+                    original_bpm=track["bpm"],
+                    target_bpm=effective_target,
+                    temp_dir=temp_dir,
+                )
+                track["playback_path"] = str(playback_path)
+                track["original_bpm"] = track["bpm"]
+                track["target_bpm"] = effective_target
+            except audio_processor.AudioProcessingError as e:
+                print(f"  Warning: could not stretch {name} — playing "
+                      f"original at {track['bpm']} BPM")
+                warn(f"Stretch failed for {name}: {e}")
+                track["playback_path"] = track["path"]
+                track["original_bpm"] = track["bpm"]
+                track["target_bpm"] = track["bpm"]  # reset — no stretch happened
+
+        print()  # clear the \r progress line
+
+        # Step 7: print playlist summary
+        print(format_summary(playlist))
+
+        # ── Phase 1 (--no-playback) path: write files and exit ───────────────
+        if args.no_playback:
+            base_output = Path(args.output)
+            output_path = base_output.parent / (base_output.name + f".{args.format}")
+            if args.format == "m3u":
+                safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
+            else:
+                safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
+
+            cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
+            if cues:
+                cue_path = base_output.parent / (base_output.name + ".cue.json")
+                safe_call(write_cue_file, cues, cue_path, fallback=None, label="write_cue_file")
+
+            print(f"Saved → {output_path}")
+            return
+
+        # ── Phase 2 (playback) path ───────────────────────────────────────────
+        # Deferred imports so --no-playback works without pygame installed
+        from core.session_controller import create_session, get_summary
+        from playback.input_handler import restore_terminal, start_listening
+        from playback.playback_engine import start
+
+        print("Preparing your playlist...")
+        print("\nControls during your run:")
+        print("  SPACE    pause / resume")
+        print("  →        skip to next track")
+        print("  ←        rewind / previous track")
+        print("  ↑ / ↓    volume up / down")
+        print("  Q        quit")
+        print("Starting in 3... 2... 1...")
+        time.sleep(3)
+
+        state = create_session(playlist, transition_style)
+        cmd_queue = queue.Queue()
+        start_listening(cmd_queue)
+
+        try:
+            start(state, cmd_queue)
+        except RuntimeError as e:
+            restore_terminal()
+            print(f"Error: {e}")
+            return
+        except KeyboardInterrupt:
+            restore_terminal()
+            print("Run interrupted.")
+            summary = get_summary(state)
+            if summary["played_paths"]:
+                safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
+            return
+
+        restore_terminal()
+        summary = get_summary(state)
+        print("Run complete!")
+        print(f"  Tracks played: {summary['tracks_played']}")
+        print(f"  Time elapsed: {summary['elapsed_mins']:.1f} min")
+
         base_output = Path(args.output)
         output_path = base_output.parent / (base_output.name + f".{args.format}")
         if args.format == "m3u":
             safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
         else:
             safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
-
-        cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
-        if cues:
-            cue_path = base_output.parent / (base_output.name + ".cue.json")
-            safe_call(write_cue_file, cues, cue_path, fallback=None, label="write_cue_file")
-
+        safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
         print(f"Saved → {output_path}")
-        return
-
-    # ── Phase 2 (playback) path ───────────────────────────────────────────────
-    # Deferred imports so --no-playback works without pygame installed
-    from core.session_controller import create_session, get_summary
-    from playback.input_handler import restore_terminal, start_listening
-    from playback.playback_engine import start
-
-    print("Preparing your playlist...")
-    print("\nControls during your run:")
-    print("  SPACE    pause / resume")
-    print("  →        skip to next track")
-    print("  ←        rewind / previous track")
-    print("  ↑ / ↓    volume up / down")
-    print("  Q        quit")
-    print("Starting in 3... 2... 1...")
-    time.sleep(3)
-
-    state = create_session(playlist, transition_style)
-    cmd_queue = queue.Queue()
-    start_listening(cmd_queue)
-
-    try:
-        start(state, cmd_queue)
-    except RuntimeError as e:
-        restore_terminal()
-        print(f"Error: {e}")
-        return
-    except KeyboardInterrupt:
-        restore_terminal()
-        print("Run interrupted.")
-        summary = get_summary(state)
-        if summary["played_paths"]:
-            safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
-        return
-
-    restore_terminal()
-    summary = get_summary(state)
-    print("Run complete!")
-    print(f"  Tracks played: {summary['tracks_played']}")
-    print(f"  Time elapsed: {summary['elapsed_mins']:.1f} min")
-
-    base_output = Path(args.output)
-    output_path = base_output.parent / (base_output.name + f".{args.format}")
-    if args.format == "m3u":
-        safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
-    else:
-        safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
-    safe_call(mark_played, summary["played_paths"], fallback=None, label="mark_played")
-    print(f"Saved → {output_path}")
+    finally:
+        temp_manager.cleanup()
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ music/song_library.json
 results/*
 !results/.gitkeep
 
+# Time-stretched audio (Phase 3)
+temp/
+
 # Logs
 logs/
 

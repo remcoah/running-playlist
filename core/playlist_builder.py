@@ -86,7 +86,10 @@ def build_playlist(
             candidates, slot_bpm, targets["energy_target"],
             context.bpm_tolerance, used_paths,
         )
-        tracks.append(song)
+        # Copy rather than mutate song in place — repeated tracks (see
+        # get_repeat_candidates) share the same dict object across slots,
+        # and each slot needs its own independent slot_target_bpm.
+        tracks.append({**song, "slot_target_bpm": slot_bpm})
         used_paths.append(song["path"])
 
     tracks, warmup_count, cooldown_count = apply_warmup_cooldown(tracks, WARMUP_MINS, COOLDOWN_MINS)

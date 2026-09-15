@@ -64,7 +64,7 @@ def preload_playlist(queue_dict: dict) -> dict[str, pygame.mixer.Sound]:
 
     cache: dict[str, pygame.mixer.Sound] = {}
     for i, track in enumerate(tracks_to_load, 1):
-        path = track["path"]
+        path = track.get("playback_path", track["path"])
         logger.info("Preloading track %d/%d...", i, total)
         sound = _load_sound(path)
         if sound is not None:
@@ -79,7 +79,7 @@ def _ensure_cached(sound_cache: dict, queue_dict: dict, idx: int) -> None:
     tracks = queue_dict["tracks"]
     if idx >= len(tracks):
         return
-    path = tracks[idx]["path"]
+    path = tracks[idx].get("playback_path", tracks[idx]["path"])
     if path not in sound_cache:
         sound = _load_sound(path)
         if sound is not None:
@@ -88,9 +88,10 @@ def _ensure_cached(sound_cache: dict, queue_dict: dict, idx: int) -> None:
 
 def _load_and_play(channel, track: dict, volume: float, sound_cache: dict) -> bool:
     """Start playing a track on the given channel from the pre-loaded cache; return True on success."""
-    sound = sound_cache.get(track["path"])
+    path = track.get("playback_path", track["path"])
+    sound = sound_cache.get(path)
     if sound is None:
-        sound = _load_sound(track["path"])
+        sound = _load_sound(path)
     if sound is None:
         return False
     channel.set_volume(volume)
@@ -239,9 +240,10 @@ def start(state: SessionState, command_queue: queue.Queue) -> None:
                     and next_idx < len(state.queue_dict["tracks"])
                 ):
                     next_track = state.queue_dict["tracks"][next_idx]
-                    sound = sound_cache.get(next_track["path"])
+                    next_path = next_track.get("playback_path", next_track["path"])
+                    sound = sound_cache.get(next_path)
                     if sound is None:
-                        sound = _load_sound(next_track["path"])
+                        sound = _load_sound(next_path)
                     if sound is not None:
                         fade_ms = int(CROSSFADE_DURATION_SECS * 1000)
                         ch_b.set_volume(state.volume)

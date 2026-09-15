@@ -6,15 +6,26 @@ from config.settings import COOLDOWN_MAX_ENERGY, REPEAT_ALLOWED_AFTER, WARMUP_MA
 
 
 def filter_by_bpm(songs: list[dict], target_bpm: int, tolerance: int) -> list[dict]:
-    """Return songs whose BPM matches the target directly or at half-time (target / 2)."""
+    """Return songs whose BPM matches the target directly or at half-time (target / 2).
+
+    Tags each returned song with half_time_match (True/False) reflecting how this
+    call matched it, so the stretch pipeline can target the song's own BPM range
+    (target/2) instead of literally doubling a half-time-matched track's tempo.
+    The flag is always overwritten, never left stale, so re-filtering the same
+    song against a different target later always reflects that later match.
+    """
     # Accept songs at the target BPM or at half-time (target/2), because a song
     # at half the cadence still feels natural — every other beat hits a footstrike.
     half_time = target_bpm / 2
-    return [
-        s for s in songs
-        if abs(s["bpm"] - target_bpm) <= tolerance
-        or abs(s["bpm"] - half_time) <= tolerance / 2
-    ]
+    matches = []
+    for s in songs:
+        if abs(s["bpm"] - target_bpm) <= tolerance:
+            s["half_time_match"] = False
+            matches.append(s)
+        elif abs(s["bpm"] - half_time) <= tolerance / 2:
+            s["half_time_match"] = True
+            matches.append(s)
+    return matches
 
 
 def exclude_recently_played(songs: list[dict], within_mins: int) -> list[dict]:

@@ -46,8 +46,15 @@ def format_summary(queue_dict: dict) -> str:
 
         title = Path(track["path"]).stem
         mins, secs = divmod(track["duration_secs"], 60)
+
+        bpm_display = f"{track['bpm']} BPM"
+        original_bpm = track.get("original_bpm")
+        target_bpm = track.get("target_bpm")
+        if original_bpm is not None and target_bpm is not None and abs(target_bpm - original_bpm) > 1:
+            bpm_display = f"{round(original_bpm)}→{round(target_bpm)} BPM"
+
         lines.append(
-            f"{i:>3}.{label} {title:<50}  {track['bpm']} BPM  "
+            f"{i:>3}.{label} {title:<50}  {bpm_display}  "
             f"energy {track['energy']:.2f}  {mins}:{secs:02d}"
         )
 

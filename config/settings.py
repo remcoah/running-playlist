@@ -41,10 +41,17 @@ LOG_LEVEL: str = "DEBUG"
 
 # Playback
 SLOT_DURATION_MINS: int = 4
-CROSSFADE_DURATION_SECS: int = 8
+CROSSFADE_DURATION_SECS: int = 12
 DEFAULT_TRANSITION: str = "crossfade"
 DEFAULT_ENERGY_PROFILE: str = "steady"
 VOLUME_STEP: float = 0.05
 INITIAL_VOLUME: float = 0.8
 REPEAT_ALLOWED_AFTER: int = 5   # minimum slots between repeat plays of the same track
 REWIND_THRESHOLD_SECS: int = 3
+
+# Time stretching (Phase 3)
+MIN_STRETCH_RATIO: float = 0.80
+MAX_STRETCH_RATIO: float = 1.25
+STRETCH_SAME_BPM_THRESHOLD: float = 0.02
+TEMP_DIR_NAME: str = "temp/stretch"
+PROCESSING_TIME_MULTIPLIER: float = 0.3
