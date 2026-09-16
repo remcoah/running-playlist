@@ -185,7 +185,7 @@ class TestGetSummary:
         ]
 
 
-class TestApplyCommand:
+class TestApplyCommandUnknownCommand:
     def test_unknown_command_leaves_state_unchanged(self):
         state = create_session(_make_queue_dict(), "crossfade")
         before_index = state.current_index
