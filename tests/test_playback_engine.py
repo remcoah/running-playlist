@@ -15,7 +15,7 @@ sys.modules.setdefault("pygame.mixer", MagicMock())
 
 import pytest  # noqa: E402 — must come after sys.modules setup
 
-from config.settings import INITIAL_VOLUME, VOLUME_STEP
+from config.settings import CROSSFADE_DURATION_SECS, INITIAL_VOLUME, VOLUME_STEP
 from core.session_controller import create_session
 from playback.playback_engine import start
 
@@ -48,6 +48,19 @@ def _busy_channel():
     ch = MagicMock()
     ch.get_busy.return_value = True
     return ch
+
+
+class FakeClock:
+    """A controllable stand-in for time.monotonic() so crossfade timing can be tested deterministically."""
+
+    def __init__(self, start: float = 0.0):
+        self._now = start
+
+    def __call__(self) -> float:
+        return self._now
+
+    def advance(self, secs: float) -> None:
+        self._now += secs
 
 
 # ── tests ─────────────────────────────────────────────────────────────────────
@@ -131,3 +144,138 @@ def test_vol_up_immediately_updates_channel_volume(mock_time, mock_pygame):
 
     expected = min(1.0, round(INITIAL_VOLUME + VOLUME_STEP, 10))
     mock_ch_a.set_volume.assert_called_with(expected)
+
+
+# ── crossfade timing (fake clock) ───────────────────────────────────────────
+
+# _make_state's tracks are fixed at 300s each; the crossfade window opens at
+# (duration_secs - CROSSFADE_DURATION_SECS) seconds elapsed on the current track.
+_TRACK_DURATION_SECS = 300
+
+
+@patch("playback.playback_engine.pygame")
+@patch("playback.playback_engine.time")
+def test_crossfade_does_not_trigger_before_threshold(mock_time, mock_pygame):
+    """Well before the crossfade window, no incoming-track playback is started on ch_b."""
+    state = _make_state(transition="crossfade")
+    cmd_queue = q.Queue()
+
+    mock_ch_a = _busy_channel()
+    mock_ch_b = _busy_channel()
+    mock_pygame.mixer.Channel.side_effect = [mock_ch_a, mock_ch_b]
+    mock_pygame.mixer.Sound.return_value = MagicMock()
+
+    clock = FakeClock(0.0)
+    mock_time.monotonic.side_effect = clock
+    # First iteration checks at elapsed=0 (300s remaining, nowhere near the
+    # crossfade window) — stop right after that single check.
+    mock_time.sleep.side_effect = lambda secs: cmd_queue.put("QUIT")
+
+    start(state, cmd_queue)
+
+    mock_ch_b.play.assert_not_called()
+
+
+@patch("playback.playback_engine.pygame")
+@patch("playback.playback_engine.time")
+def test_crossfade_triggers_at_threshold(mock_time, mock_pygame):
+    """Once time remaining drops to CROSSFADE_DURATION_SECS, the incoming track starts on ch_b."""
+    state = _make_state(transition="crossfade")
+    cmd_queue = q.Queue()
+
+    mock_ch_a = _busy_channel()
+    mock_ch_b = _busy_channel()
+    mock_pygame.mixer.Channel.side_effect = [mock_ch_a, mock_ch_b]
+    mock_pygame.mixer.Sound.return_value = MagicMock()
+
+    clock = FakeClock(0.0)
+    mock_time.monotonic.side_effect = clock
+    threshold_elapsed = _TRACK_DURATION_SECS - CROSSFADE_DURATION_SECS
+    calls = {"count": 0}
+
+    def fake_sleep(secs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            clock.advance(threshold_elapsed)  # land exactly on the trigger point
+        else:
+            cmd_queue.put("QUIT")
+
+    mock_time.sleep.side_effect = fake_sleep
+
+    start(state, cmd_queue)
+
+    mock_ch_b.play.assert_called_once()
+
+
+@patch("playback.playback_engine.pygame")
+@patch("playback.playback_engine.time")
+def test_crossfade_swap_occurs_after_full_duration(mock_time, mock_pygame):
+    """Once the crossfade has fully elapsed, the channels swap and the track advances.
+
+    ch_a.stop() is only ever called from the swap branch (the natural-finish
+    branch never calls it), so seeing it fire alongside current_index
+    advancing is a reliable proxy for "the swap branch actually ran" without
+    reaching into start()'s local crossfade_start_time variable.
+    """
+    state = _make_state(transition="crossfade")
+    cmd_queue = q.Queue()
+
+    mock_ch_a = _busy_channel()
+    mock_ch_b = _busy_channel()
+    mock_pygame.mixer.Channel.side_effect = [mock_ch_a, mock_ch_b]
+    mock_pygame.mixer.Sound.return_value = MagicMock()
+
+    clock = FakeClock(0.0)
+    mock_time.monotonic.side_effect = clock
+    threshold_elapsed = _TRACK_DURATION_SECS - CROSSFADE_DURATION_SECS
+    calls = {"count": 0}
+
+    def fake_sleep(secs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            clock.advance(threshold_elapsed)  # reach the trigger point
+        elif calls["count"] == 2:
+            clock.advance(CROSSFADE_DURATION_SECS)  # crossfade fully elapses
+        else:
+            cmd_queue.put("QUIT")
+
+    mock_time.sleep.side_effect = fake_sleep
+
+    start(state, cmd_queue)
+
+    assert state.current_index == 1
+    mock_ch_a.stop.assert_called_once()
+
+
+@patch("playback.playback_engine.pygame")
+@patch("playback.playback_engine.time")
+def test_crossfade_does_not_swap_before_full_duration_elapsed(mock_time, mock_pygame):
+    """Before the crossfade has fully elapsed, the channels have not swapped yet."""
+    state = _make_state(transition="crossfade")
+    cmd_queue = q.Queue()
+
+    mock_ch_a = _busy_channel()
+    mock_ch_b = _busy_channel()
+    mock_pygame.mixer.Channel.side_effect = [mock_ch_a, mock_ch_b]
+    mock_pygame.mixer.Sound.return_value = MagicMock()
+
+    clock = FakeClock(0.0)
+    mock_time.monotonic.side_effect = clock
+    threshold_elapsed = _TRACK_DURATION_SECS - CROSSFADE_DURATION_SECS
+    calls = {"count": 0}
+
+    def fake_sleep(secs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            clock.advance(threshold_elapsed)  # reach the trigger point
+        elif calls["count"] == 2:
+            clock.advance(CROSSFADE_DURATION_SECS - 1)  # just short of full duration
+        else:
+            cmd_queue.put("QUIT")
+
+    mock_time.sleep.side_effect = fake_sleep
+
+    start(state, cmd_queue)
+
+    assert state.current_index == 0
+    mock_ch_a.stop.assert_not_called()
