@@ -148,7 +148,7 @@ python -m pytest tests/ -v
 |---|---|---|
 | 1 | ✅ Complete | CLI playlist generator |
 | 2 | ✅ Complete | In-app playback, energy profiles, live controls |
-| 3 | 🔲 Planned | Time stretching and section selection |
+| 3 | ✅ Complete | Time stretching and section selection |
 | 4 | 🔲 Planned | Voiceover cues and interval training |
 | 5 | 🔲 Planned | Flask API |
 | 6 | 🔲 Planned | Strava integration |
