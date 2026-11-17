@@ -13,6 +13,7 @@ from core.playlist_builder import build_playlist
 from core.run_calculator import build_run_context
 from music import audio_processor, temp_manager
 from music.audio_analyzer import (
+    SUPPORTED_EXTENSIONS,
     clear_play_history,
     get_library,
     mark_played,
@@ -75,6 +76,17 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _print_music_folder_help(problem: str) -> None:
+    """Explain a missing or empty music folder and list the ways to fix it."""
+    exts = " ".join(sorted(SUPPORTED_EXTENSIONS))
+    print(f"Error: {problem}")
+    print(f"Supported formats: {exts}")
+    print("To fix this, do one of the following:")
+    print(f"  1. Copy some audio files into {settings.DEFAULT_MUSIC_FOLDER}")
+    print("  2. Point at another folder:  python main.py ... --folder PATH")
+    print("  3. Generate demo tracks:     python scripts/make_demo_songs.py")
+
+
 def main() -> None:
     """Orchestrate the full pipeline: parse args, build run context, scan library, generate playlist, and optionally play it."""
     configure_logging()
@@ -114,18 +126,15 @@ def main() -> None:
     try:
         scan_folder(args.folder)
     except FileNotFoundError:
-        print(f"Error: music folder not found: {args.folder}")
-        print("Check the path and try again.")
+        _print_music_folder_help(f"Music folder not found: {args.folder}")
         sys.exit(1)
     except ValueError:
-        exts = " ".join(sorted({".mp3", ".flac", ".wav", ".m4a"}))
-        print(f"Error: no supported audio files found in {args.folder}")
-        print(f"Supported formats: {exts}")
+        _print_music_folder_help(f"No supported audio files found in {args.folder}")
         sys.exit(1)
 
-    library = safe_call(get_library, fallback=[], label="get_library")
+    library = safe_call(get_library, args.folder, fallback=[], label="get_library")
     if not library:
-        print("Error: library is empty after scan. Check --folder and re-run.")
+        _print_music_folder_help(f"No supported audio files found in {args.folder}")
         sys.exit(1)
 
     print(f"Library: {len(library)} tracks scanned")

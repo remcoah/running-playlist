@@ -99,9 +99,16 @@ def _load_raw() -> list[dict]:
         return json.load(f)
 
 
-def get_library() -> list[dict]:
-    """Read song_library.json and return songs with energy normalised across the full library."""
+def get_library(folder_path: str | None = None) -> list[dict]:
+    """Read song_library.json and return songs with energy normalised across the returned set.
+
+    If folder_path is given, only songs stored under that folder are returned, so a
+    cache built from earlier runs against other folders doesn't leak into this one.
+    """
     songs = _load_raw()
+    if folder_path is not None:
+        folder = Path(folder_path).resolve()
+        songs = [s for s in songs if Path(s["path"]).is_relative_to(folder)]
     return _normalise_energy(songs) if songs else songs
 
 
