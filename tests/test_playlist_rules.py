@@ -117,7 +117,9 @@ class TestExcludeRecentlyPlayed:
 
     def test_naive_timestamp_treated_as_utc(self):
         # Naive ISO string (no timezone info) should not crash and should be treated as UTC
-        naive_ts = datetime.utcnow().replace(microsecond=0).isoformat()  # no tzinfo
+        naive_ts = (
+            datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0).isoformat()
+        )  # no tzinfo
         song = make_song(last_played=naive_ts)
         # Played just now, so should be excluded
         result = exclude_recently_played([song], within_mins=60)
