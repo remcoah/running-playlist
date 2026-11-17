@@ -2,7 +2,9 @@
 
 Turns your own music library into a running mix. Give it a distance and pace and it picks songs that match your cadence, time-stretches them to the right tempo, and plays them back to back with crossfades, shaped to an energy curve across the run.
 
-<!-- DEMO: drag your screen recording here in the GitHub web editor (see "Recording the demo" in my notes) -->
+*A 3 km run built from my own library (recording has no audio).*
+
+https://github.com/user-attachments/assets/25841b88-955c-4a63-8624-4a55af52dd54
 
 ## Why I built it
 
