@@ -9,7 +9,6 @@ from core.session_controller import (
     create_session,
     current_track,
     get_summary,
-    is_complete,
     rewind_track,
 )
 

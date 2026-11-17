@@ -13,8 +13,6 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault("pygame", MagicMock())
 sys.modules.setdefault("pygame.mixer", MagicMock())
 
-import pytest  # noqa: E402 — must come after sys.modules setup
-
 from config.settings import CROSSFADE_DURATION_SECS, INITIAL_VOLUME, VOLUME_STEP
 from core.session_controller import create_session
 from playback.playback_engine import start

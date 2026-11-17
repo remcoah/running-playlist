@@ -41,8 +41,3 @@ def safe_call(
 def warn(message: str) -> None:
     """Log a warning message."""
     logger.warning(message)
-
-
-def info(message: str) -> None:
-    """Log an informational message."""
-    logger.info(message)

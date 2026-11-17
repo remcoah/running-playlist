@@ -87,6 +87,17 @@ def _print_music_folder_help(problem: str) -> None:
     print("  3. Generate demo tracks:     python scripts/make_demo_songs.py")
 
 
+def _write_playlist(playlist: dict, output: Path, fmt: str) -> Path:
+    """Write the playlist as <output>.<fmt> (m3u or json) and return the path written."""
+    base_output = Path(output)
+    output_path = base_output.parent / (base_output.name + f".{fmt}")
+    if fmt == "m3u":
+        safe_call(write_m3u, playlist, output_path, fallback=None, label="write_m3u")
+    else:
+        safe_call(write_json, playlist, output_path, fallback=None, label="write_json")
+    return output_path
+
+
 def main() -> None:
     """Orchestrate the full pipeline: parse args, build run context, scan library, generate playlist, and optionally play it."""
     configure_logging()
@@ -260,19 +271,11 @@ def main() -> None:
 
         # ── Phase 1 (--no-playback) path: write files and exit ───────────────
         if args.no_playback:
-            base_output = Path(args.output)
-            output_path = base_output.parent / (base_output.name + f".{args.format}")
-            if args.format == "m3u":
-                safe_call(
-                    write_m3u, playlist, output_path, fallback=None, label="write_m3u"
-                )
-            else:
-                safe_call(
-                    write_json, playlist, output_path, fallback=None, label="write_json"
-                )
+            output_path = _write_playlist(playlist, args.output, args.format)
 
             cues = safe_call(build_cues, playlist, fallback=[], label="build_cues")
             if cues:
+                base_output = Path(args.output)
                 cue_path = base_output.parent / (base_output.name + ".cue.json")
                 safe_call(
                     write_cue_file,
@@ -291,7 +294,6 @@ def main() -> None:
         from playback.input_handler import restore_terminal, start_listening
         from playback.playback_engine import start
 
-        print("Preparing your playlist...")
         print("\nControls during your run:")
         print("  SPACE    pause / resume")
         print("  →        skip to next track")
@@ -330,16 +332,7 @@ def main() -> None:
         print(f"  Tracks played: {summary['tracks_played']}")
         print(f"  Time elapsed: {summary['elapsed_mins']:.1f} min")
 
-        base_output = Path(args.output)
-        output_path = base_output.parent / (base_output.name + f".{args.format}")
-        if args.format == "m3u":
-            safe_call(
-                write_m3u, playlist, output_path, fallback=None, label="write_m3u"
-            )
-        else:
-            safe_call(
-                write_json, playlist, output_path, fallback=None, label="write_json"
-            )
+        output_path = _write_playlist(playlist, args.output, args.format)
         safe_call(
             mark_played, summary["played_paths"], fallback=None, label="mark_played"
         )

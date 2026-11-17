@@ -2,8 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
-
 from config.settings import COOLDOWN_MAX_ENERGY, WARMUP_MAX_ENERGY
 from core.playlist_rules import (
     apply_warmup_cooldown,

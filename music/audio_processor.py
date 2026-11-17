@@ -73,7 +73,7 @@ def stretch_track(
     if original_bpm <= 0:
         raise AudioProcessingError(
             f"Invalid original_bpm ({original_bpm}) for "
-            f"{Path(source_path).name} — cannot calculate stretch ratio"
+            f"{filename} — cannot calculate stretch ratio"
         )
 
     ratio = target_bpm / original_bpm
