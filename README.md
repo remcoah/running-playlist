@@ -1,156 +1,179 @@
 # Running Playlist Generator
 
-A CLI tool that builds a running playlist matched to your pace. Given a distance and pace, it picks songs from your music library where the BPM aligns with your target cadence, arranged into warmup, main run, and cooldown phases.
+Turns your own music library into a running mix. Give it a distance and pace and it picks songs that match your cadence, time-stretches them to the right tempo, and plays them back to back with crossfades, shaped to an energy curve across the run.
 
-## How it works
+<!-- DEMO: drag your screen recording here in the GitHub web editor (see "Recording the demo" in my notes) -->
 
-- Calculates your target BPM from your pace and stride length (e.g. 5:30 min/km → ~165 BPM)
-- Matches songs by direct BPM or half-time (an 82 BPM track still feels right on the beat)
-- Assigns low-energy tracks to warmup and cooldown phases automatically
-- Avoids songs you've played recently (default: 7-day window)
-- Repeats songs if your library is too small to fill the run
+## Why I built it
 
-## Requirements
+I like running to DJ sets. A good set is one continuous mix where the tempo and energy carry you, and you never break stride waiting for the next song. Streaming apps can't do that with my own library, so I built a tool that can. It works out the tempo my feet are hitting, finds songs that fit, nudges them onto that tempo and mixes them together.
 
-- Python 3.9+
-- [Anaconda](https://www.anaconda.com/) or `pip`
-- [pygame](https://www.pygame.org/) (installed via requirements.txt) — required for audio playback. Not needed for `--no-playback` mode.
-- [ffmpeg](https://ffmpeg.org/) — required for time stretching (Phase 3). 
-  Install via `brew install ffmpeg` on Mac. The app will show a clear 
-  error and fall back to unstretched playback if ffmpeg is not found.
+## What it does
 
-## Installation
+- **Works out your target tempo** from pace and stride length (5:30 min/km is about 165 BPM)
+- **Analyses your library** for BPM and energy with librosa, cached so each song is only analysed once
+- **Picks the closest match** to the target BPM for each part of the run, using energy to choose between close candidates. Half-time tracks count too (an 82 BPM song still lands on every other step)
+- **Time-stretches** each song onto the target tempo without changing its pitch, so a 156 BPM track plays at 165
+- **Shapes the run** with calmer songs for the warmup and cooldown, and an energy profile in between: steady, build (finish strong) or pyramid (peak in the middle)
+- **Plays it as a mix** with crossfades and live keyboard controls
+- **Rotates your music** by skipping songs you've run to in the last 7 days, and only repeats a song if your library is too small to fill the run
+
+## Quick start
+
+You'll need macOS or Linux (the keyboard controls use Unix terminal APIs), Python 3.10 or newer (tested on 3.10 and 3.13), and ffmpeg.
 
 ```bash
-# Clone the repo
+brew install ffmpeg            # or your Linux package manager
+
 git clone https://github.com/remcoah/running-playlist.git
 cd running-playlist
-
-# Install dependencies
+python3.10 -m venv .venv       # any Python 3.10+ works; check with python3 --version
+source .venv/bin/activate
 pip install -r requirements.txt
-# Add your music files to the songs/ folder (MP3, FLAC, WAV, M4A)
 ```
 
-## Usage
+**Add some music.** Copy audio files into `songs/`, or point the app at an existing folder with `--folder`. Supported formats: `.mp3`, `.flac`, `.wav`, `.m4a`, `.ogg`, `.aiff`.
 
-> **Note:** Playlist quality depends on having songs near your 
-> target BPM in your library. 
+**No music handy?** Generate a few royalty-free click tracks at running tempos:
 
 ```bash
-python main.py --distance <km> --pace <min/km> [options]
+python scripts/make_demo_songs.py
 ```
 
-**Required arguments:**
+**Run it:**
 
-| Argument | Description | Example |
+```bash
+python main.py --distance 5 --pace 5.5
+```
+
+The first run analyses your library, which takes a few seconds per song. After that it's cached. You'll see the playlist, choose a transition style and energy profile, then the app stretches the tracks and starts playing. The playlist is also saved to `results/playlist.m3u`, which opens in VLC or any M3U player.
+
+To build and save a playlist without playing audio (handy on a machine without speakers):
+
+```bash
+python main.py --distance 5 --pace 5.5 --no-playback
+```
+
+### Controls
+
+| Key | Action |
+|---|---|
+| `Space` | Pause / resume |
+| `→` | Next track |
+| `←` | Restart track (or previous track if within the first 3 seconds) |
+| `↑` / `↓` | Volume |
+| `Q` | Quit |
+
+<details>
+<summary><b>All command line options</b></summary>
+
+| Option | Default | Description |
 |---|---|---|
-| `--distance` | Run distance in kilometres | `10` |
-| `--pace` | Pace in minutes per kilometre | `5.5` |
-
-You will be prompted for: 
-  - Transition style (crossfade or hard cut)
-  - Energy profile (steady, build, pyramid)
-
-**Optional arguments:**
-
-| Argument | Default | Description |
-|---|---|---|
+| `--distance` | required | Run distance in kilometres |
+| `--pace` | required | Pace in minutes per kilometre |
 | `--folder` | `songs/` | Path to your music folder |
-| `--tolerance` | `15` | BPM tolerance around target (wider = more songs eligible) |
-| `--format` | `m3u` | Output format: `m3u` or `json` |
-| `--output` | `results/playlist` | Output file path (without extension) |
-| `--rescan` | off | Delete cached library and re-analyse all files from scratch |
-| `--no-playback` | off | Generate and save the playlist without playing audio |
-| `--ignore-recent` | off | Includes recently played songs (useful for testing)|
-| `--clear-history` | off | Resets last played for all songs in the library (useful for testing or starting fresh)|
+| `--tolerance` | `15` | BPM tolerance around the target (wider means more songs are eligible) |
+| `--format` | `m3u` | Saved playlist format: `m3u` or `json` |
+| `--output` | `results/playlist` | Output path, without extension |
+| `--rescan` | off | Re-analyse the whole library from scratch |
+| `--no-playback` | off | Build and save the playlist without playing it |
+| `--ignore-recent` | off | Include songs played in the last 7 days |
+| `--clear-history` | off | Reset play history for every song |
 
-
-## Examples
-
-10 km run at 5:30 min/km using your own music folder:
+**More examples:**
 
 ```bash
+# 10 km using your own music folder
 python main.py --distance 10 --pace 5.5 --folder ~/Music
-```
 
-Half marathon with a wider BPM window and JSON output:
-
-```bash
+# Half marathon with a wider BPM window, saved as JSON
 python main.py --distance 21.1 --pace 6.0 --tolerance 20 --format json
-```
 
-Force a full rescan after adding new songs:
-
-```bash
+# Re-analyse everything after adding new songs
 python main.py --distance 5 --pace 5.0 --rescan
 ```
 
-The generated playlist is saved to `results/playlist.m3u` (or `.json`) and can be opened directly in VLC or any M3U-compatible player.
-
-## Controls
-
-```
-SPACE    pause / resume
-→        skip to next track
-←        rewind / previous track
-↑ / ↓    volume up / down
-Q        quit
-```
-
-## Energy profiles
-
-```
-Steady    Consistent BPM and energy throughout
-Build     Starts calm, ramps up to a high-energy finish
-Pyramid   Builds to a peak at the halfway point then winds down
-```
-
-## Supported audio formats
-
-`.mp3`, `.flac`, `.wav`, `.m4a`, `.ogg`, `.aiff`
-
-## Personalisation
-
-Edit `config/user_profile.json` to set your stride length (affects BPM calculation):
+**Stride length** affects the target BPM. The default of 2.2 m suits most runners. To change it, edit `config/user_profile.json`:
 
 ```json
 {
-  "stride_length_m": 2.2,
+  "stride_length_m": 2.2
 }
 ```
 
-The default stride length of 2.2 m is a reasonable average for most runners. A shorter stride (e.g. 1.8 m) will produce a higher target BPM at the same pace.
+A shorter stride gives a higher target BPM at the same pace.
 
-## Project structure
+</details>
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Distance, pace,<br/>stride length] --> B[run_calculator<br/>target BPM + duration]
+    L[audio_analyzer<br/>BPM + energy cache] --> C
+    B --> C[playlist_builder<br/>energy profile + rules]
+    C --> D[audio_processor<br/>ffmpeg + time stretch]
+    D --> E[playback_engine<br/>pygame, crossfades]
+    K[input_handler<br/>keyboard thread] -->|command queue| E
+    E <--> S[session_controller<br/>run state]
+```
+
+A few rules hold the design together:
+
+- **Each module owns one job.** Only `playback_engine` touches pygame, only `audio_analyzer` reads or writes the song cache, only `session_controller` holds run state, and only `main.py` prints. Everything else returns data, which keeps it testable.
+- **One shape for every input.** Whatever the source of a run's details, it becomes a `RunContext`. That's so future inputs like Strava history or live heart rate can plug in without touching the playlist logic.
+- **Threads talk through a queue.** The keyboard listener drops commands into a queue and the audio loop picks them up, so neither can block the other.
+- **Nothing slow happens during playback.** Analysis, stretching and loading audio all happen before the first song plays. Any disk read inside the playback loop is audible as a stutter.
 
 ```
-running-playlist/
-├── config/          # Settings and user profile
-├── core/            # Run context, playlist logic, rules
-├── music/           # Audio analysis and library cache
-├── output/          # Playlist and cue sheet writers
-├── playback/        # Audio playback engine and input handler
-├── results/         # Generated playlists (git-ignored)
-├── songs/           # Your music folder (git-ignored)
-├── tests/           # pytest test suite
-└── main.py          # CLI entry point
+config/     Settings and user profile
+core/       Run calculation, playlist building, rules, energy profiles, session state
+music/      Library analysis, time stretching, temp file management
+playback/   Audio engine and keyboard input
+output/     Playlist and summary formatting
+scripts/    Demo track generator
+tests/      pytest suite
+songs/      Your music (git-ignored)
+results/    Saved playlists (git-ignored)
+main.py     Command line entry point
 ```
 
-## Running the tests
+## How I built it
+
+I designed the system before writing code: the layers, what each module accepts and returns, and which module owns what. Then I built it in three phases (playlist generator, playback, time stretching), each adding to the last without rewriting it.
+
+I talked through design options with Claude, and Claude Code wrote most of the implementation one module at a time. I made the design calls, reviewed every diff, ran the tests and used the app on real runs before moving on. The decisions I'm proudest of:
+
+- **Stretching as a bridge, not the engine.** After hearing songs stretched by 20%, I changed selection to prefer songs already near the target BPM, so stretching only closes a small gap.
+- **The `RunContext` abstraction**, so Strava or heart rate data can plug in later without touching the playlist logic.
+- **Not calling anything done until I'd heard it.** Most bugs were found by listening on real runs, not by tests.
+
+## Two bugs I learned from
+
+**Crossfades broke after time-stretching, but only for sped-up songs.** Tracks kept their original length after stretching, so a song shortened from 302 to 277 seconds ended before the crossfade window opened. I found it by logging each step of a transition and testing sped-up and slowed-down songs separately, then fixed it by measuring the stretched audio. Lesson: when a change works in two directions, test both.
+
+**A duplicate test class silently skipped 8 tests.** `TestApplyCommand` was defined twice, so Python kept only the second and pytest ran 1 of 9 tests while reporting everything as passing. `pytest --collect-only` confirmed it, and renaming the class brought the 8 tests back. They passed. Lesson: a passing count isn't proof, so check what's actually being collected.
+
+## Tests
 
 ```bash
-python -m pytest tests/ -v
+pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-## Project status
+131 tests cover the BPM maths, playlist rules, song selection, time-stretching decisions, session state, keyboard handling and crossfade timing. Audio and hardware are mocked so the suite runs in under a second, and crossfade timing is tested with a fake clock that the tests move forward. What a stretched song actually sounds like is something I checked by ear.
 
-| Phase | Status | Description |
-|---|---|---|
-| 1 | ✅ Complete | CLI playlist generator |
-| 2 | ✅ Complete | In-app playback, energy profiles, live controls |
-| 3 | ✅ Complete | Time stretching and section selection |
-| 4 | 🔲 Planned | Voiceover cues and interval training |
-| 5 | 🔲 Planned | Flask API |
-| 6 | 🔲 Planned | Strava integration |
-| 7 | 🔲 Planned | Live heart rate adaptive BPM |
-| 8 | 🔲 Planned | Mobile app |
+## Limitations
+
+- Tested on macOS. Linux should work, Windows won't (keyboard handling uses Unix terminal APIs)
+- Keyboard controls need a real terminal, not an IDE output pane
+- Songs more than about 20% away from the target BPM are played unstretched rather than distorted
+- Playlists are only as good as the library: a library full of 120 BPM songs won't make a great 170 BPM run
+- Stretched tracks are written to `temp/` as WAV files during a run (a few hundred MB for a long run) and deleted afterwards
+
+## What's next
+
+- Voice cues and interval training
+- Strava integration to set pace from recent runs
+- Live heart rate, adjusting tempo mid-run to keep you in your target zone
+- A mobile app
